@@ -1,12 +1,12 @@
-import {Duration} from 'luxon';
-import React, {CSSProperties, useEffect, useState} from 'react';
+import { Duration } from 'luxon';
+import React, { CSSProperties, useEffect, useState } from 'react';
 
 type Props = {
-    startAt: number,
-    style?: CSSProperties,
-}
+    startAt: number;
+    style?: CSSProperties;
+};
 
-const oneHour = Duration.fromObject({hours: 1});
+const oneHour = Duration.fromObject({ hours: 1 });
 
 function getCallDuration(startAt: number) {
     const dur = Duration.fromMillis(Date.now() - startAt);
@@ -30,7 +30,5 @@ export default function CallDuration(props: Props) {
         style.fontWeight = 600;
     }
 
-    return (
-        <div style={style}>{getCallDuration(props.startAt)}</div>
-    );
+    return <div style={style}>{getCallDuration(props.startAt)}</div>;
 }

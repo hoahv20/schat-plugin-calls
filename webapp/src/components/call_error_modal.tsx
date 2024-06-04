@@ -1,13 +1,19 @@
 import React, {ComponentProps} from 'react';
-import {ModalHeader} from 'react-bootstrap';
-import {useIntl} from 'react-intl';
+import {defineMessage, useIntl} from 'react-intl';
 import {
     insecureContextErr,
     rtcPeerCloseErr,
     rtcPeerErr,
+    rtcPeerTimeoutErr,
     userLeftChannelErr,
     userRemovedFromChannelErr,
 } from 'src/client';
+import {
+    ColumnContainer,
+    FooterContainer,
+    Header,
+    StyledGenericModal,
+} from 'src/components/generic_error_modal';
 import GenericModal from 'src/components/generic_modal';
 import LaptopAlertSVG from 'src/components/icons/laptop_alert_svg';
 import {untranslatable} from 'src/utils';
@@ -21,6 +27,11 @@ type CustomProps = {
 type Props = Partial<ComponentProps<typeof GenericModal>> & CustomProps;
 
 export const CallErrorModalID = 'call-error-modal';
+
+export const hostRemovedMsg = 'host-removed';
+export const removedMsgTitle = defineMessage({defaultMessage: 'You were removed from the call'});
+export const removedMsg = defineMessage({defaultMessage: 'The host removed you from the call.'});
+export const removedDismiss = defineMessage({defaultMessage: 'Dismiss'});
 
 export const CallErrorModal = (props: Props) => {
     const {formatMessage} = useIntl();
@@ -54,8 +65,9 @@ export const CallErrorModal = (props: Props) => {
     };
 
     const troubleShootingMsg = (
-        <React.Fragment>
-            { formatMessage(
+        <>
+            {/*@ts-ignore*/}
+            {formatMessage(
                 {
                     defaultMessage: 'Check the <troubleShootingLink>troubleshooting section</troubleShootingLink> if the problem persists.',
                 },
@@ -67,7 +79,7 @@ export const CallErrorModal = (props: Props) => {
                         >{text}</a>
                     ),
                 })}
-        </React.Fragment>
+        </>
     );
 
     const genericMsg = (
@@ -88,13 +100,34 @@ export const CallErrorModal = (props: Props) => {
     let confirmMsg = formatMessage({defaultMessage: 'Okay'});
 
     switch (props.err.message) {
-    case rtcPeerErr.message:
-    case rtcPeerCloseErr.message:
+    case rtcPeerTimeoutErr.message:
         headerMsg = (
-            <span>{formatMessage({defaultMessage: 'Connection failed'})}</span>
+            <span>{formatMessage({defaultMessage: 'Call connection failed'})}</span>
         );
         msg = (
             <span>
+                {/*@ts-ignore*/}
+                {formatMessage({defaultMessage: 'We couldn\'t join the call because the connection timed out. Please check your network connection and try again.'}, {
+                    joinLink: (text: string) => (
+                        <a
+                            href=''
+                            onClick={onRejoinClick}
+                        >{text}</a>
+                    ),
+                })}
+                {untranslatable(' ')}
+                {troubleShootingMsg}
+            </span>
+        );
+        break;
+    case rtcPeerErr.message:
+    case rtcPeerCloseErr.message:
+        headerMsg = (
+            <span>{formatMessage({defaultMessage: 'Call connection failed'})}</span>
+        );
+        msg = (
+            <span>
+                {/*@ts-ignore*/}
                 {formatMessage({defaultMessage: 'There was an error with the connection to the call. Try to <joinLink>re-join</joinLink> the call.'}, {
                     joinLink: (text: string) => (
                         <a
@@ -149,6 +182,15 @@ export const CallErrorModal = (props: Props) => {
             </span>
         );
         break;
+    case hostRemovedMsg:
+        headerMsg = (
+            <>{formatMessage(removedMsgTitle)}</>
+        );
+        msg = (
+            <>{formatMessage(removedMsg)}</>
+        );
+        confirmMsg = formatMessage(removedDismiss);
+        break;
     }
 
     return (
@@ -159,7 +201,7 @@ export const CallErrorModal = (props: Props) => {
             confirmButtonText={confirmMsg}
             onHide={() => null}
             handleConfirm={onConfirm}
-            contentPadding={'24px 32px'}
+            contentPadding={'4px 32px 24px 32px'}
             components={{
                 Header: Header as never,
                 FooterContainer,
@@ -171,25 +213,6 @@ export const CallErrorModal = (props: Props) => {
         </StyledGenericModal>
     );
 };
-
-const Header = styled(ModalHeader)`
-    display: flex;
-`;
-
-const FooterContainer = styled.div`
-    display: flex;
-    gap: 8px;
-`;
-
-const StyledGenericModal = styled(GenericModal)`
-    width: 600px;
-`;
-
-const ColumnContainer = styled.div`
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-`;
 
 const LaptopAlertSVGContainer = styled.div`
     align-self: center;

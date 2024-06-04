@@ -27,6 +27,9 @@ const (
 	clientMessageTypeRaiseHand   = "raise_hand"
 	clientMessageTypeUnraiseHand = "unraise_hand"
 	clientMessageTypeReact       = "react"
+	clientMessageTypeCaption     = "caption"
+	clientMessageTypeMetric      = "metric"
+	clientMessageTypeCallState   = "call_state"
 )
 
 func (m *clientMessage) ToJSON() ([]byte, error) {

@@ -1,22 +1,34 @@
-import {ChannelMembership} from '@mattermost/types/channels';
-import {GlobalState} from '@mattermost/types/store';
-import {UserProfile} from '@mattermost/types/users';
-import {NotificationLevel} from 'mattermost-redux/constants/channels';
-import {getChannel, getMyChannelMember} from 'mattermost-redux/selectors/entities/channels';
-import {getServerVersion} from 'mattermost-redux/selectors/entities/general';
-import {getTeammateNameDisplaySetting} from 'mattermost-redux/selectors/entities/preferences';
-import {getCurrentUser, getUser, makeGetProfilesInChannel} from 'mattermost-redux/selectors/entities/users';
-import {isChannelMuted} from 'mattermost-redux/utils/channel_utils';
-import {isMinimumServerVersion} from 'mattermost-redux/utils/helpers';
-import {displayUsername} from 'mattermost-redux/utils/user_utils';
-import {useEffect} from 'react';
-import {useIntl} from 'react-intl';
-import {useDispatch, useSelector, useStore} from 'react-redux';
-import {DID_NOTIFY_FOR_CALL, DID_RING_FOR_CALL} from 'src/action_types';
-import {dismissIncomingCallNotification, ringForCall, showSwitchCallModal, trackEvent} from 'src/actions';
-import {navigateToURL} from 'src/browser_routing';
-import {DEFAULT_RING_SOUND} from 'src/constants';
-import {logDebug} from 'src/log';
+import { ChannelMembership } from '@mattermost/types/channels';
+import { GlobalState } from '@mattermost/types/store';
+import { UserProfile } from '@mattermost/types/users';
+import { NotificationLevel } from 'mattermost-redux/constants/channels';
+import {
+    getChannel,
+    getMyChannelMember,
+} from 'mattermost-redux/selectors/entities/channels';
+import { getServerVersion } from 'mattermost-redux/selectors/entities/general';
+import { getTeammateNameDisplaySetting } from 'mattermost-redux/selectors/entities/preferences';
+import {
+    getCurrentUser,
+    getUser,
+    makeGetProfilesInChannel,
+} from 'mattermost-redux/selectors/entities/users';
+import { isChannelMuted } from 'mattermost-redux/utils/channel_utils';
+import { isMinimumServerVersion } from 'mattermost-redux/utils/helpers';
+import { displayUsername } from 'mattermost-redux/utils/user_utils';
+import { useEffect } from 'react';
+import { useIntl } from 'react-intl';
+import { useDispatch, useSelector, useStore } from 'react-redux';
+import { DID_NOTIFY_FOR_CALL, DID_RING_FOR_CALL } from 'src/action_types';
+import {
+    dismissIncomingCallNotification,
+    ringForCall,
+    showSwitchCallModal,
+    trackEvent,
+} from 'src/actions';
+import { navigateToURL } from 'src/browser_routing';
+import { DEFAULT_RING_SOUND } from 'src/constants';
+import { logDebug } from 'src/log';
 import {
     channelIDForCurrentCall,
     currentlyRinging,
@@ -27,7 +39,11 @@ import {
     teamForCurrentCall,
 } from 'src/selectors';
 import * as Telemetry from 'src/types/telemetry';
-import {ChannelType, IncomingCallNotification, UserStatuses} from 'src/types/types';
+import {
+    ChannelType,
+    IncomingCallNotification,
+    UserStatuses,
+} from 'src/types/types';
 import {
     desktopGTE,
     getCallsClient,
@@ -38,9 +54,13 @@ import {
     shouldRenderDesktopWidget,
     split,
 } from 'src/utils';
-import {sendDesktopNotificationToMe} from 'src/webapp_globals';
+import { sendDesktopNotificationToMe } from 'src/webapp_globals';
 
-export const useDismissJoin = (channelID: string, callID: string, onWidget = false) => {
+export const useDismissJoin = (
+    channelID: string,
+    callID: string,
+    onWidget = false,
+) => {
     const store = useStore();
     const dispatch = useDispatch();
     const connectedID = useSelector(channelIDForCurrentCall) || '';
@@ -65,19 +85,32 @@ export const useDismissJoin = (channelID: string, callID: string, onWidget = fal
                     logDebug('desktopAPI.sendJoinCallRequest');
                     window.desktopAPI.sendJoinCallRequest(channelID);
                 } else if (desktopGTE(5, 5)) {
-                    logDebug('sending calls-join-request message to desktop app');
+                    logDebug(
+                        'sending calls-join-request message to desktop app',
+                    );
 
                     // DEPRECATED: legacy Desktop API logic (<= 5.6.0)
                     sendDesktopEvent('calls-join-request', {
                         callID: channelID,
                     });
                 } else {
-                    logDebug('sending calls-widget-channel-link-click and calls-joined-call message to desktop app');
-                    const currentChannel = getChannel(store.getState(), connectedID);
-                    const channelURL = getChannelURL(store.getState(), currentChannel, currentChannel.team_id);
+                    logDebug(
+                        'sending calls-widget-channel-link-click and calls-joined-call message to desktop app',
+                    );
+                    const currentChannel = getChannel(
+                        store.getState(),
+                        connectedID,
+                    );
+                    const channelURL = getChannelURL(
+                        store.getState(),
+                        currentChannel,
+                        currentChannel.team_id,
+                    );
 
                     // DEPRECATED: legacy Desktop API logic (<= 5.6.0)
-                    sendDesktopEvent('calls-widget-channel-link-click', {pathName: channelURL});
+                    sendDesktopEvent('calls-widget-channel-link-click', {
+                        pathName: channelURL,
+                    });
 
                     // DEPRECATED: legacy Desktop API logic (<= 5.6.0)
                     sendDesktopEvent('calls-joined-call', {
@@ -95,7 +128,7 @@ export const useDismissJoin = (channelID: string, callID: string, onWidget = fal
 
         // We weren't connected, so dismiss the notification here.
         dispatch(dismissIncomingCallNotification(channelID, callID));
-        window.postMessage({type: 'connectCall', channelID}, window.origin);
+        window.postMessage({ type: 'connectCall', channelID }, window.origin);
     };
 
     return [onDismiss, onJoin];
@@ -106,15 +139,23 @@ export const useOnACallWithoutGlobalWidget = () => {
     return Boolean(connectedChannel && !shouldRenderDesktopWidget());
 };
 
-const getNotificationSoundFromChannelMemberAndUser = (member: ChannelMembership | null | undefined, user: UserProfile) => {
+const getNotificationSoundFromChannelMemberAndUser = (
+    member: ChannelMembership | null | undefined,
+    user: UserProfile,
+) => {
     if (member?.notify_props?.desktop_notification_sound) {
         return member.notify_props.desktop_notification_sound;
     }
 
-    return user.notify_props?.desktop_notification_sound ? user.notify_props.desktop_notification_sound : 'Bing';
+    return user.notify_props?.desktop_notification_sound
+        ? user.notify_props.desktop_notification_sound
+        : 'Bing';
 };
 
-const getDesktopSoundFromChannelMemberAndUser = (member: ChannelMembership | null | undefined, user: UserProfile) => {
+const getDesktopSoundFromChannelMemberAndUser = (
+    member: ChannelMembership | null | undefined,
+    user: UserProfile,
+) => {
     if (member?.notify_props?.desktop_sound) {
         if (member.notify_props.desktop_sound === 'off') {
             return false;
@@ -125,38 +166,75 @@ const getDesktopSoundFromChannelMemberAndUser = (member: ChannelMembership | nul
 };
 
 const getRingingFromUser = (user: UserProfile) => {
-    const callsRing = !user.notify_props || (user.notify_props.calls_desktop_sound || 'true') === 'true'; // default true if not set
-    return !user.notify_props || (callsRing && user.notify_props.desktop !== NotificationLevel.NONE);
+    const callsRing =
+        !user.notify_props ||
+        (user.notify_props.calls_desktop_sound || 'true') === 'true'; // default true if not set
+    return (
+        !user.notify_props ||
+        (callsRing && user.notify_props.desktop !== NotificationLevel.NONE)
+    );
 };
 
 const getDesktopNotificationFromUser = (user: UserProfile) => {
-    return !user.notify_props || user.notify_props.desktop !== NotificationLevel.NONE;
+    return (
+        !user.notify_props ||
+        user.notify_props.desktop !== NotificationLevel.NONE
+    );
 };
 
-const getDesktopNotificationFromChannel = (member: ChannelMembership | null | undefined) => {
-    return !member?.notify_props?.desktop || member.notify_props.desktop !== NotificationLevel.NONE;
+const getDesktopNotificationFromChannel = (
+    member: ChannelMembership | null | undefined,
+) => {
+    return (
+        !member?.notify_props?.desktop ||
+        member.notify_props.desktop !== NotificationLevel.NONE
+    );
 };
 
 // useNotificationSettings returns [shouldRing, shouldDesktopNotificationSound, shouldDesktopNotification]
 const useNotificationSettings = (channelID: string, user: UserProfile) => {
     const status = useSelector(getStatusForCurrentUser);
-    const member = useSelector((state: GlobalState) => getMyChannelMember(state, channelID));
-    const muted = !member || isChannelMuted(member) || status === UserStatuses.DND || status === UserStatuses.OUT_OF_OFFICE;
+    const member = useSelector((state: GlobalState) =>
+        getMyChannelMember(state, channelID),
+    );
+    const muted =
+        !member ||
+        isChannelMuted(member) ||
+        status === UserStatuses.DND ||
+        status === UserStatuses.OUT_OF_OFFICE;
     const ring = !muted && getRingingFromUser(user);
-    const desktopSoundEnabled = getDesktopSoundFromChannelMemberAndUser(member, user);
-    const desktopNotificationEnabledInChannel = getDesktopNotificationFromChannel(member);
-    const desktopNotificationEnabledGlobally = getDesktopNotificationFromUser(user);
-    const desktopNotificationEnabled = desktopNotificationEnabledInChannel && desktopNotificationEnabledGlobally;
-    return [!muted && ring, !muted && desktopSoundEnabled, !muted && desktopNotificationEnabled];
+    const desktopSoundEnabled = getDesktopSoundFromChannelMemberAndUser(
+        member,
+        user,
+    );
+    const desktopNotificationEnabledInChannel =
+        getDesktopNotificationFromChannel(member);
+    const desktopNotificationEnabledGlobally =
+        getDesktopNotificationFromUser(user);
+    const desktopNotificationEnabled =
+        desktopNotificationEnabledInChannel &&
+        desktopNotificationEnabledGlobally;
+    return [
+        !muted && ring,
+        !muted && desktopSoundEnabled,
+        !muted && desktopNotificationEnabled,
+    ];
 };
 
-export const useRingingAndNotification = (call: IncomingCallNotification, onWidget: boolean) => {
+export const useRingingAndNotification = (
+    call: IncomingCallNotification,
+    onWidget: boolean,
+) => {
     const dispatch = useDispatch();
     const currentUser = useSelector(getCurrentUser);
-    const didRing = useSelector((state: GlobalState) => didRingForCall(state, call.callID));
+    const didRing = useSelector((state: GlobalState) =>
+        didRingForCall(state, call.callID),
+    );
     const [shouldRing] = useNotificationSettings(call.channelID, currentUser);
     const currRinging = useSelector(currentlyRinging);
-    const currRingingForThisCall = useSelector((state: GlobalState) => ringingForCall(state, call.callID));
+    const currRingingForThisCall = useSelector((state: GlobalState) =>
+        ringingForCall(state, call.callID),
+    );
     const connected = Boolean(useSelector(channelIDForCurrentCall));
     useNotification(call);
 
@@ -179,34 +257,72 @@ export const useRingingAndNotification = (call: IncomingCallNotification, onWidg
             return;
         }
 
-        dispatch(ringForCall(call.callID, currentUser.notify_props.calls_notification_sound || DEFAULT_RING_SOUND));
+        dispatch(
+            ringForCall(
+                call.callID,
+                currentUser.notify_props.calls_notification_sound ||
+                    DEFAULT_RING_SOUND,
+            ),
+        );
     }, []);
 };
 
 export const useNotification = (call: IncomingCallNotification) => {
-    const {formatMessage} = useIntl();
+    const { formatMessage } = useIntl();
     const dispatch = useDispatch();
-    const channel = useSelector((state: GlobalState) => getChannel(state, call.channelID));
+    const channel = useSelector((state: GlobalState) =>
+        getChannel(state, call.channelID),
+    );
     const currentUser = useSelector(getCurrentUser);
-    const myChannelMember = useSelector((state: GlobalState) => getMyChannelMember(state, call.channelID));
-    const url = useSelector((state: GlobalState) => getChannelURL(state, channel, channel.team_id));
-    const didNotify = useSelector((state: GlobalState) => didNotifyForCall(state, call.callID));
-    const [_, shouldDesktopNotificationSound, shouldDesktopNotification] = useNotificationSettings(call.channelID, currentUser);
+    const myChannelMember = useSelector((state: GlobalState) =>
+        getMyChannelMember(state, call.channelID),
+    );
+    const url = useSelector((state: GlobalState) =>
+        getChannelURL(state, channel, channel.team_id),
+    );
+    const didNotify = useSelector((state: GlobalState) =>
+        didNotifyForCall(state, call.callID),
+    );
+    const [_, shouldDesktopNotificationSound, shouldDesktopNotification] =
+        useNotificationSettings(call.channelID, currentUser);
     const serverVersion = useSelector(getServerVersion);
     const [callerName, others] = useGetCallerNameAndOthers(call, 2);
 
     const title = others.length === 0 ? callerName : others;
-    const body = formatMessage({defaultMessage: '{callerName} is inviting you to a call'}, {callerName});
+    const body = formatMessage(
+        { defaultMessage: '{callerName} is inviting you to a call' },
+        { callerName },
+    );
 
     useEffect(() => {
-        if (shouldDesktopNotification && !didNotify && document.visibilityState === 'hidden') {
+        if (
+            shouldDesktopNotification &&
+            !didNotify &&
+            document.visibilityState === 'hidden'
+        ) {
             if (sendDesktopNotificationToMe) {
-                if (call.type === ChannelType.DM && !isMinimumServerVersion(serverVersion, 8, 1)) {
+                if (
+                    call.type === ChannelType.DM &&
+                    !isMinimumServerVersion(serverVersion, 8, 1)
+                ) {
                     // MM <8.1 will send its own generic channel notification for DMs
                     return;
                 }
-                const soundName = getNotificationSoundFromChannelMemberAndUser(myChannelMember, currentUser);
-                dispatch(sendDesktopNotificationToMe(title, body, channel, channel.team_id, !shouldDesktopNotificationSound, soundName, url));
+                const soundName = getNotificationSoundFromChannelMemberAndUser(
+                    myChannelMember,
+                    currentUser,
+                );
+                dispatch(
+                    sendDesktopNotificationToMe(
+                        title,
+                        body,
+                        channel,
+                        channel.team_id,
+                        !shouldDesktopNotificationSound,
+                        soundName,
+                        url,
+                    ),
+                );
 
                 // window.e2eDesktopNotificationSent is added when running the e2e tests
                 if (window.e2eDesktopNotificationsSent) {
@@ -225,23 +341,41 @@ export const useNotification = (call: IncomingCallNotification) => {
     }, []);
 };
 
-export const useGetCallerNameAndOthers = (call: IncomingCallNotification, splitAt: number) => {
-    const {formatMessage, formatList} = useIntl();
+export const useGetCallerNameAndOthers = (
+    call: IncomingCallNotification,
+    splitAt: number,
+) => {
+    const { formatMessage, formatList } = useIntl();
     const teammateNameDisplay = useSelector(getTeammateNameDisplaySetting);
-    const caller = useSelector((state: GlobalState) => getUser(state, call.callerID));
+    const caller = useSelector((state: GlobalState) =>
+        getUser(state, call.callerID),
+    );
     const currentUser = useSelector(getCurrentUser);
     const doGetProfilesInChannel = makeGetProfilesInChannel();
-    const gmMembers = useSelector((state: GlobalState) => doGetProfilesInChannel(state, call.channelID));
+    const gmMembers = useSelector((state: GlobalState) =>
+        doGetProfilesInChannel(state, call.channelID),
+    );
     const callerName = displayUsername(caller, teammateNameDisplay, false);
 
     let others = '';
     if (call.type === ChannelType.GM) {
-        const otherMembers = gmMembers.filter((u) => u.id !== caller.id && u.id !== currentUser.id);
+        const otherMembers = gmMembers.filter(
+            (u) => u.id !== caller.id && u.id !== currentUser.id,
+        );
         const [displayed, overflowed] = split(otherMembers, splitAt);
-        const users = displayed.map((u) => displayUsername(u, teammateNameDisplay));
+        const users = displayed.map((u) =>
+            displayUsername(u, teammateNameDisplay),
+        );
         if (overflowed) {
-            users.push(formatMessage({defaultMessage: '{num, plural, one {# other} other {# others}}'},
-                {num: overflowed.length}));
+            users.push(
+                formatMessage(
+                    {
+                        defaultMessage:
+                            '{num, plural, one {# other} other {# others}}',
+                    },
+                    { num: overflowed.length },
+                ),
+            );
         }
         others = formatList(users);
     }
@@ -249,12 +383,19 @@ export const useGetCallerNameAndOthers = (call: IncomingCallNotification, splitA
     return [callerName, others];
 };
 
-export const useOnChannelLinkClick = (call: IncomingCallNotification, onWidget = false) => {
+export const useOnChannelLinkClick = (
+    call: IncomingCallNotification,
+    onWidget = false,
+) => {
     const dispatch = useDispatch();
     const global = Boolean(isDesktopApp() && getCallsClient());
     const defaultTeam = useSelector(teamForCurrentCall);
-    const channel = useSelector((state: GlobalState) => getChannel(state, call.channelID));
-    let channelURL = useSelector((state: GlobalState) => getChannelURL(state, channel, channel.team_id));
+    const channel = useSelector((state: GlobalState) =>
+        getChannel(state, call.channelID),
+    );
+    let channelURL = useSelector((state: GlobalState) =>
+        getChannelURL(state, channel, channel.team_id),
+    );
     const source = telemetrySource(onWidget);
 
     if (global && channelURL.startsWith('/channels')) {
@@ -265,21 +406,28 @@ export const useOnChannelLinkClick = (call: IncomingCallNotification, onWidget =
     if (global) {
         return () => {
             notificationsStopRinging(); // User interacted with notifications, so stop ringing for _any_ incoming call.
-            dispatch(trackEvent(Telemetry.Event.NotificationClickGotoChannel, source));
+            dispatch(
+                trackEvent(
+                    Telemetry.Event.NotificationClickGotoChannel,
+                    source,
+                ),
+            );
 
             if (window.desktopAPI?.openLinkFromCalls) {
                 logDebug('desktopAPI.openLinkFromCalls');
                 window.desktopAPI.openLinkFromCalls(channelURL);
             } else {
                 // DEPRECATED: legacy Desktop API logic (<= 5.6.0)
-                sendDesktopEvent('calls-link-click', {link: channelURL});
+                sendDesktopEvent('calls-link-click', { link: channelURL });
             }
         };
     }
 
     return () => {
         notificationsStopRinging();
-        dispatch(trackEvent(Telemetry.Event.NotificationClickGotoChannel, source));
+        dispatch(
+            trackEvent(Telemetry.Event.NotificationClickGotoChannel, source),
+        );
         navigateToURL(channelURL);
     };
 };

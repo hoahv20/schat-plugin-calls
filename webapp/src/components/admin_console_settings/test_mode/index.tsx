@@ -1,13 +1,16 @@
 // Copyright (c) 2015-present Mattermost, Inc. All Rights Reserved.
 // See LICENSE.txt for license information.
 
-import React, {ChangeEvent} from 'react';
-import {useIntl} from 'react-intl';
-import {leftCol, rightCol} from 'src/components/admin_console_settings/common';
-import {CustomComponentProps} from 'src/types/mattermost-webapp';
+import React, { ChangeEvent } from 'react';
+import { useIntl } from 'react-intl';
+import {
+    leftCol,
+    rightCol,
+} from 'src/components/admin_console_settings/common';
+import { CustomComponentProps } from 'src/types/mattermost-webapp';
 
 const TestMode = (props: CustomComponentProps) => {
-    const {formatMessage} = useIntl();
+    const { formatMessage } = useIntl();
 
     // Note: this component is taking the DefaultEnabled config setting and converting it to 'TestMode'.
     // DefaultEnabled = true  => TestMode = 'off'
@@ -22,13 +25,8 @@ const TestMode = (props: CustomComponentProps) => {
     };
 
     return (
-        <div
-            data-testid={props.id}
-            className='form-group'
-        >
-            <label className={'control-label ' + leftCol}>
-                {props.label}
-            </label>
+        <div data-testid={props.id} className='form-group'>
+            <label className={'control-label ' + leftCol}>{props.label}</label>
             <div className={rightCol}>
                 <label className='radio-inline'>
                     <input
@@ -40,7 +38,7 @@ const TestMode = (props: CustomComponentProps) => {
                         checked={testMode === 'off'}
                         onChange={handleChange}
                     />
-                    {formatMessage({defaultMessage: 'Off'})}
+                    {formatMessage({ defaultMessage: 'Off' })}
                 </label>
                 <label className='radio-inline'>
                     <input
@@ -52,16 +50,14 @@ const TestMode = (props: CustomComponentProps) => {
                         checked={testMode === 'on'}
                         onChange={handleChange}
                     />
-                    {formatMessage({defaultMessage: 'On'})}
+                    {formatMessage({ defaultMessage: 'On' })}
                 </label>
-                <div
-                    data-testid={props.id + 'help-text'}
-                    className='help-text'
-                >
+                <div data-testid={props.id + 'help-text'} className='help-text'>
                     {props.helpText}
                 </div>
             </div>
-        </div>);
+        </div>
+    );
 };
 
 export default TestMode;

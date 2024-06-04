@@ -1,28 +1,31 @@
-import React, {ChangeEvent} from 'react';
-import {useSelector} from 'react-redux';
-import {LabelRow, leftCol, rightCol} from 'src/components/admin_console_settings/common';
+import React, { ChangeEvent } from 'react';
+import { useSelector } from 'react-redux';
+import {
+    LabelRow,
+    leftCol,
+    rightCol,
+} from 'src/components/admin_console_settings/common';
 import manifest from 'src/manifest';
-import {isCloud, isOnPremNotEnterprise, transcriptionsEnabled} from 'src/selectors';
-import {CustomComponentProps} from 'src/types/mattermost-webapp';
+import { recordingsEnabled, transcriptionsEnabled } from 'src/selectors';
+import { CustomComponentProps } from 'src/types/mattermost-webapp';
 
 const TranscriberModelSize = (props: CustomComponentProps) => {
-    const restricted = useSelector(isOnPremNotEnterprise);
-    const cloud = useSelector(isCloud);
     const hasTranscriptions = useSelector(transcriptionsEnabled);
+    const recordingEnabled = useSelector(recordingsEnabled);
 
-    if (cloud || restricted || !hasTranscriptions) {
+    if (!hasTranscriptions || !recordingEnabled) {
         return null;
     }
 
     // Webapp doesn't pass the options
-    const rawOptions = manifest.settings_schema?.settings.find((e) => e.key === 'TranscriberModelSize')?.options || [];
+    const rawOptions =
+        manifest.settings_schema?.settings.find(
+            (e) => e.key === 'TranscriberModelSize',
+        )?.options || [];
     const options = [];
-    for (const {display_name, value} of rawOptions) {
+    for (const { display_name, value } of rawOptions) {
         options.push(
-            <option
-                value={value}
-                key={value}
-            >
+            <option value={value} key={value}>
                 {display_name}
             </option>,
         );
@@ -33,16 +36,10 @@ const TranscriberModelSize = (props: CustomComponentProps) => {
     };
 
     return (
-        <div
-            data-testid={props.id}
-            className='form-group'
-        >
+        <div data-testid={props.id} className='form-group'>
             <div className={'control-label ' + leftCol}>
                 <LabelRow>
-                    <label
-                        data-testid={props.id + 'label'}
-                        htmlFor={props.id}
-                    >
+                    <label data-testid={props.id + 'label'} htmlFor={props.id}>
                         {props.label}
                     </label>
                 </LabelRow>
@@ -58,10 +55,7 @@ const TranscriberModelSize = (props: CustomComponentProps) => {
                 >
                     {options}
                 </select>
-                <div
-                    data-testid={props.id + 'help-text'}
-                    className='help-text'
-                >
+                <div data-testid={props.id + 'help-text'} className='help-text'>
                     {props.helpText}
                 </div>
             </div>

@@ -1,58 +1,90 @@
-import {CallsConfig, CallState, UserSessionState} from '@calls/common/lib/types';
-import {ClientError} from '@mattermost/client';
-import {getChannel as loadChannel} from 'mattermost-redux/actions/channels';
-import {bindClientFunc} from 'mattermost-redux/actions/helpers';
-import {getThread as fetchThread} from 'mattermost-redux/actions/threads';
-import {getProfilesByIds as getProfilesByIdsAction} from 'mattermost-redux/actions/users';
-import {getChannel} from 'mattermost-redux/selectors/entities/channels';
-import {getConfig} from 'mattermost-redux/selectors/entities/general';
-import {getCurrentTeamId} from 'mattermost-redux/selectors/entities/teams';
-import {getThread} from 'mattermost-redux/selectors/entities/threads';
-import {getCurrentUserId, getUser, isCurrentUserSystemAdmin} from 'mattermost-redux/selectors/entities/users';
-import {ActionFunc, DispatchFunc, GenericAction, GetStateFunc} from 'mattermost-redux/types/actions';
-import {MessageDescriptor} from 'react-intl';
-import {AnyAction, Dispatch} from 'redux';
-import {batchActions} from 'redux-batched-actions';
-import {CloudFreeTrialModalAdmin, CloudFreeTrialModalUser, IDAdmin, IDUser} from 'src/cloud_pricing/modals';
-import {CallErrorModal, CallErrorModalID} from 'src/components/call_error_modal';
-import {GenericErrorModal, IDGenericErrorModal} from 'src/components/generic_error_modal';
-import {CallsInTestModeModal, IDTestModeUser} from 'src/components/modals';
-import {RING_LENGTH} from 'src/constants';
-import {logErr} from 'src/log';
+/* eslint-disable max-lines */
+
+import { CallsConfig, CallState } from '@mattermost/calls-common/lib/types';
+import { ClientError } from '@mattermost/client';
+import { Channel } from '@mattermost/types/channels';
+import { UserTypes } from 'mattermost-redux/action_types';
+import { getChannel as loadChannel } from 'mattermost-redux/actions/channels';
+import { bindClientFunc } from 'mattermost-redux/actions/helpers';
+import { getThread as fetchThread } from 'mattermost-redux/actions/threads';
+import { getProfilesByIds as getProfilesByIdsAction } from 'mattermost-redux/actions/users';
+import { getChannel } from 'mattermost-redux/selectors/entities/channels';
+import { getConfig } from 'mattermost-redux/selectors/entities/general';
+import { getCurrentTeamId } from 'mattermost-redux/selectors/entities/teams';
+import { getThread } from 'mattermost-redux/selectors/entities/threads';
+import {
+    getCurrentUserId,
+    getUser,
+    isCurrentUserSystemAdmin,
+} from 'mattermost-redux/selectors/entities/users';
+import {
+    ActionFuncAsync,
+    DispatchFunc,
+    GetStateFunc,
+} from 'mattermost-redux/types/actions';
+import { MessageDescriptor } from 'react-intl';
+import { AnyAction, Dispatch } from 'redux';
+import { batchActions } from 'redux-batched-actions';
+import {
+    CloudFreeTrialModalAdmin,
+    CloudFreeTrialModalUser,
+    IDAdmin,
+    IDUser,
+} from 'src/cloud_pricing/modals';
+import {
+    CallErrorModal,
+    CallErrorModalID,
+} from 'src/components/call_error_modal';
+import {
+    GenericErrorModal,
+    IDGenericErrorModal,
+} from 'src/components/generic_error_modal';
+import { CallsInTestModeModal, IDTestModeUser } from 'src/components/modals';
+import { RING_LENGTH } from 'src/constants';
+import { logErr } from 'src/log';
 import RestClient from 'src/rest_client';
 import {
     callDismissedNotification,
     calls,
-    channelHasCall, hostChangeAtForCurrentCall,
-    idForCurrentCall, incomingCalls,
+    channelHasCall,
+    hostChangeAtForCurrentCall,
+    idForCurrentCall,
+    incomingCalls,
     ringingEnabled,
     ringingForCall,
 } from 'src/selectors';
 import * as Telemetry from 'src/types/telemetry';
-import {ChannelType} from 'src/types/types';
+import { ChannelType } from 'src/types/types';
 import {
     getPluginPath,
-    getProfilesForSessions,
+    getSessionsMapFromSessions,
+    getUserIDsForSessions,
     isDesktopApp,
     isDMChannel,
     isGMChannel,
     notificationsStopRinging,
 } from 'src/utils';
-import {modals, notificationSounds, openPricingModal} from 'src/webapp_globals';
+import {
+    modals,
+    notificationSounds,
+    openPricingModal,
+} from 'src/webapp_globals';
 
 import {
     ADD_INCOMING_CALL,
     CALL_HOST,
+    CALL_LIVE_CAPTIONS_STATE,
     CALL_REC_PROMPT_DISMISSED,
     CALL_RECORDING_STATE,
     CALL_STATE,
+    CLIENT_CONNECTING,
     DID_RING_FOR_CALL,
     DISMISS_CALL,
     HIDE_END_CALL_MODAL,
     HIDE_EXPANDED_VIEW,
     HIDE_SCREEN_SOURCE_MODAL,
     HIDE_SWITCH_CALL_MODAL,
-    PROFILES_JOINED,
+    LIVE_CAPTIONS_ENABLED,
     RECEIVED_CALLS_CONFIG,
     RECORDINGS_ENABLED,
     REMOVE_INCOMING_CALL,
@@ -67,87 +99,97 @@ import {
     USERS_STATES,
 } from './action_types';
 
-export const showExpandedView = () => (dispatch: Dispatch<GenericAction>) => {
+export const showExpandedView = () => (dispatch: Dispatch) => {
     dispatch({
         type: SHOW_EXPANDED_VIEW,
     });
 };
 
-export const hideExpandedView = () => (dispatch: Dispatch<GenericAction>) => {
+export const hideExpandedView = () => (dispatch: Dispatch) => {
     dispatch({
         type: HIDE_EXPANDED_VIEW,
     });
 };
 
-export const showSwitchCallModal = (targetID?: string) => (dispatch: Dispatch<GenericAction>) => {
-    dispatch({
-        type: SHOW_SWITCH_CALL_MODAL,
-        data: {
-            targetID,
-        },
-    });
-};
+export const showSwitchCallModal =
+    (targetID?: string) => (dispatch: Dispatch) => {
+        dispatch({
+            type: SHOW_SWITCH_CALL_MODAL,
+            data: {
+                targetID,
+            },
+        });
+    };
 
-export const hideSwitchCallModal = () => (dispatch: Dispatch<GenericAction>) => {
+export const hideSwitchCallModal = () => (dispatch: Dispatch) => {
     dispatch({
         type: HIDE_SWITCH_CALL_MODAL,
     });
 };
 
-export const hideEndCallModal = () => (dispatch: Dispatch<GenericAction>) => {
+export const hideEndCallModal = () => (dispatch: Dispatch) => {
     dispatch({
         type: HIDE_END_CALL_MODAL,
     });
 };
 
-export const showScreenSourceModal = () => (dispatch: Dispatch<GenericAction>) => {
+export const showScreenSourceModal = () => (dispatch: Dispatch) => {
     dispatch({
         type: SHOW_SCREEN_SOURCE_MODAL,
     });
 };
 
-export const hideScreenSourceModal = () => (dispatch: Dispatch<GenericAction>) => {
+export const hideScreenSourceModal = () => (dispatch: Dispatch) => {
     dispatch({
         type: HIDE_SCREEN_SOURCE_MODAL,
     });
 };
 
-export const getCallsConfig = (): ActionFunc => {
+export const getCallsConfig = (): ActionFuncAsync<CallsConfig> => {
     return bindClientFunc({
-        clientFunc: () => RestClient.fetch<CallsConfig>(
-            `${getPluginPath()}/config`,
-            {method: 'get'},
-        ),
+        clientFunc: () =>
+            RestClient.fetch<CallsConfig>(`${getPluginPath()}/config`, {
+                method: 'get',
+            }),
         onSuccess: [RECEIVED_CALLS_CONFIG],
     });
 };
 
-export const setRecordingsEnabled = (enabled: boolean) => (dispatch: Dispatch<GenericAction>) => {
-    dispatch({
-        type: RECORDINGS_ENABLED,
-        data: enabled,
-    });
-};
+export const setRecordingsEnabled =
+    (enabled: boolean) => (dispatch: Dispatch) => {
+        dispatch({
+            type: RECORDINGS_ENABLED,
+            data: enabled,
+        });
+    };
 
-export const setRTCDEnabled = (enabled: boolean) => (dispatch: Dispatch<GenericAction>) => {
+export const setRTCDEnabled = (enabled: boolean) => (dispatch: Dispatch) => {
     dispatch({
         type: RTCD_ENABLED,
         data: enabled,
     });
 };
 
-export const setTranscriptionsEnabled = (enabled: boolean) => (dispatch: Dispatch<GenericAction>) => {
-    dispatch({
-        type: TRANSCRIPTIONS_ENABLED,
-        data: enabled,
-    });
-};
+export const setTranscriptionsEnabled =
+    (enabled: boolean) => (dispatch: Dispatch) => {
+        dispatch({
+            type: TRANSCRIPTIONS_ENABLED,
+            data: enabled,
+        });
+    };
+
+export const setLiveCaptionsEnabled =
+    (enabled: boolean) => (dispatch: Dispatch) => {
+        dispatch({
+            type: LIVE_CAPTIONS_ENABLED,
+            data: enabled,
+        });
+    };
 
 export const notifyAdminCloudFreeTrial = async () => {
-    return RestClient.fetch(
-        `${getPluginPath()}/cloud-notify-admins`,
-        {method: 'post'},
-    );
+    return RestClient.fetch(`${getPluginPath()}/cloud-notify-admins`, {
+        method: 'post',
+    });
 };
 
 export const displayFreeTrial = () => {
@@ -155,15 +197,19 @@ export const displayFreeTrial = () => {
         const isAdmin = isCurrentUserSystemAdmin(getState());
 
         if (isAdmin) {
-            dispatch(modals.openModal({
-                modalId: IDAdmin,
-                dialogType: CloudFreeTrialModalAdmin,
-            }));
+            dispatch(
+                modals.openModal({
+                    modalId: IDAdmin,
+                    dialogType: CloudFreeTrialModalAdmin,
+                }),
+            );
         } else {
-            dispatch(modals.openModal({
-                modalId: IDUser,
-                dialogType: CloudFreeTrialModalUser,
-            }));
+            dispatch(
+                modals.openModal({
+                    modalId: IDUser,
+                    dialogType: CloudFreeTrialModalUser,
+                }),
+            );
         }
 
         return {};
@@ -171,18 +217,22 @@ export const displayFreeTrial = () => {
 };
 
 export const displayCloudPricing = () => {
-    return async (dispatch: DispatchFunc, getState: GetStateFunc) => {
+    return async (_: DispatchFunc, getState: GetStateFunc) => {
         const isAdmin = isCurrentUserSystemAdmin(getState());
         if (!isAdmin) {
             return {};
         }
 
-        openPricingModal()({trackingLocation: 'calls > '});
+        openPricingModal()({ trackingLocation: 'calls > ' });
         return {};
     };
 };
 
-export const requestOnPremTrialLicense = async (users: number, termsAccepted: boolean, receiveEmailsAccepted: boolean) => {
+export const requestOnPremTrialLicense = async (
+    users: number,
+    termsAccepted: boolean,
+    receiveEmailsAccepted: boolean,
+) => {
     try {
         const response = await RestClient.fetch(
             `${RestClient.getBaseRoute()}/trial-license`,
@@ -195,34 +245,40 @@ export const requestOnPremTrialLicense = async (users: number, termsAccepted: bo
                 }),
             },
         );
-        return {data: response};
+        return { data: response };
     } catch (e) {
         // In the event that the status code returned is 451, this request has been blocked because it originated from an embargoed country
         const err = e as ClientError;
-        return {error: err.message, data: {status: err.status_code}};
+        return { error: err.message, data: { status: err.status_code } };
     }
 };
 
 export const endCall = (channelID: string) => {
-    return RestClient.fetch(
-        `${getPluginPath()}/calls/${channelID}/end`,
-        {method: 'post'},
-    );
+    return RestClient.fetch(`${getPluginPath()}/calls/${channelID}/end`, {
+        method: 'post',
+    });
 };
 
-export const displayCallErrorModal = (err: Error, channelID?: string) => (dispatch: Dispatch<GenericAction>) => {
-    dispatch(modals.openModal({
-        modalId: CallErrorModalID,
-        dialogType: CallErrorModal,
-        dialogProps: {
-            channelID,
-            err,
-        },
-    }));
-};
+export const displayCallErrorModal =
+    (err: Error, channelID?: string) => (dispatch: Dispatch) => {
+        dispatch(
+            modals.openModal({
+                modalId: CallErrorModalID,
+                dialogType: CallErrorModal,
+                dialogProps: {
+                    channelID,
+                    err,
+                },
+            }),
+        );
+    };
 
-export const trackEvent = (event: Telemetry.Event, source: Telemetry.Source, props?: Record<string, string>) => {
-    return (dispatch: DispatchFunc, getState: GetStateFunc) => {
+export const trackEvent = (
+    event: Telemetry.Event,
+    source: Telemetry.Source,
+    props?: Record<string, string>,
+) => {
+    return (_: DispatchFunc, getState: GetStateFunc) => {
         const config = getConfig(getState());
         if (config.DiagnosticsEnabled !== 'true') {
             return;
@@ -236,10 +292,10 @@ export const trackEvent = (event: Telemetry.Event, source: Telemetry.Source, pro
             source,
             props,
         };
-        RestClient.fetch(
-            `${getPluginPath()}/telemetry/track`,
-            {method: 'post', body: JSON.stringify(eventData)},
-        ).catch((e) => {
+        RestClient.fetch(`${getPluginPath()}/telemetry/track`, {
+            method: 'post',
+            body: JSON.stringify(eventData),
+        }).catch((e) => {
             logErr(e);
         });
     };
@@ -251,22 +307,24 @@ export function prefetchThread(postId: string) {
         const teamId = getCurrentTeamId(state);
         const currentUserId = getCurrentUserId(state);
 
-        const thread = getThread(state, postId) ?? (await dispatch(fetchThread(currentUserId, teamId, postId, true))).data;
+        const thread =
+            getThread(state, postId) ??
+            (await dispatch(fetchThread(currentUserId, teamId, postId, true)))
+                .data;
 
-        return {data: thread};
+        return { data: thread };
     };
 }
 
-export const startCallRecording = (callID: string) => (dispatch: Dispatch<GenericAction>) => {
-    RestClient.fetch(
-        `${getPluginPath()}/calls/${callID}/recording/start`,
-        {method: 'post'},
-    ).catch((err) => {
+export const startCallRecording = (callID: string) => (dispatch: Dispatch) => {
+    RestClient.fetch(`${getPluginPath()}/calls/${callID}/recording/start`, {
+        method: 'post',
+    }).catch((err) => {
         dispatch({
             type: CALL_RECORDING_STATE,
             data: {
                 callID,
-                recState: {
+                jobState: {
                     init_at: 0,
                     start_at: 0,
                     end_at: 0,
@@ -281,53 +339,68 @@ export const startCallRecording = (callID: string) => (dispatch: Dispatch<Generi
 export const stopCallRecording = async (callID: string) => {
     return RestClient.fetch(
         `${getPluginPath()}/calls/${callID}/recording/stop`,
-        {method: 'post'},
+        { method: 'post' },
     );
 };
 
-export const recordingPromptDismissedAt = (callID: string, dismissedAt: number) => (dispatch: Dispatch<GenericAction>) => {
-    dispatch({
-        type: CALL_REC_PROMPT_DISMISSED,
-        data: {
-            callID,
-            dismissedAt,
-        },
-    });
+export const recordingPromptDismissedAt =
+    (callID: string, dismissedAt: number) => (dispatch: Dispatch) => {
+        dispatch({
+            type: CALL_REC_PROMPT_DISMISSED,
+            data: {
+                callID,
+                dismissedAt,
+            },
+        });
 
-    if (window.currentCallData) {
-        window.currentCallData.recordingPromptDismissedAt = dismissedAt;
-    }
-};
+        if (window.currentCallData) {
+            window.currentCallData.recordingPromptDismissedAt = dismissedAt;
+        }
+    };
 
 export const displayCallsTestModeUser = () => {
     return async (dispatch: DispatchFunc) => {
-        dispatch(modals.openModal({
-            modalId: IDTestModeUser,
-            dialogType: CallsInTestModeModal,
-        }));
+        dispatch(
+            modals.openModal({
+                modalId: IDTestModeUser,
+                dialogType: CallsInTestModeModal,
+            }),
+        );
 
         return {};
     };
 };
 
-export const displayGenericErrorModal = (title: MessageDescriptor, message: MessageDescriptor) => {
+export const displayGenericErrorModal = (
+    title: MessageDescriptor,
+    message: MessageDescriptor,
+    confirmText?: MessageDescriptor,
+) => {
     return async (dispatch: DispatchFunc) => {
-        dispatch(modals.openModal({
-            modalId: IDGenericErrorModal,
-            dialogType: GenericErrorModal,
-            dialogProps: {
-                title,
-                message,
-            },
-        }));
+        dispatch(
+            modals.openModal({
+                modalId: IDGenericErrorModal,
+                dialogType: GenericErrorModal,
+                dialogProps: {
+                    title,
+                    message,
+                    confirmText,
+                },
+            }),
+        );
 
         return {};
     };
 };
 
-export function incomingCallOnChannel(channelID: string, callID: string, callerID: string, startAt: number) {
+export function incomingCallOnChannel(
+    channelID: string,
+    callID: string,
+    callerID: string,
+    startAt: number,
+) {
     return async (dispatch: DispatchFunc, getState: GetStateFunc) => {
-        let channel = getChannel(getState(), channelID);
+        let channel: Channel | undefined = getChannel(getState(), channelID);
         if (!channel) {
             const res = await dispatch(loadChannel(channelID));
             channel = res.data;
@@ -341,7 +414,10 @@ export function incomingCallOnChannel(channelID: string, callID: string, callerI
             return;
         }
 
-        if (incomingCalls(getState()).findIndex((ic) => ic.callID === callID) >= 0) {
+        if (
+            incomingCalls(getState()).findIndex((ic) => ic.callID === callID) >=
+            0
+        ) {
             return;
         }
 
@@ -357,7 +433,7 @@ export function incomingCallOnChannel(channelID: string, callID: string, callerI
             await dispatch(getProfilesByIdsAction([callerID]));
         }
 
-        await dispatch({
+        dispatch({
             type: ADD_INCOMING_CALL,
             data: {
                 callID,
@@ -370,12 +446,16 @@ export function incomingCallOnChannel(channelID: string, callID: string, callerI
     };
 }
 
-export const userLeft = (channelID: string, userID: string, sessionID: string) => {
+export const userLeft = (
+    channelID: string,
+    userID: string,
+    sessionID: string,
+) => {
     return async (dispatch: DispatchFunc, getState: GetStateFunc) => {
         // save for later
         const callID = calls(getState())[channelID]?.ID || '';
 
-        await dispatch({
+        dispatch({
             type: USER_LEFT,
             data: {
                 channelID,
@@ -385,17 +465,23 @@ export const userLeft = (channelID: string, userID: string, sessionID: string) =
             },
         });
 
-        if (ringingEnabled(getState()) && !channelHasCall(getState(), channelID)) {
+        if (
+            ringingEnabled(getState()) &&
+            !channelHasCall(getState(), channelID)
+        ) {
             await dispatch(removeIncomingCallNotification(callID));
         }
     };
 };
 
-export const dismissIncomingCallNotification = (channelID: string, callID: string) => {
+export const dismissIncomingCallNotification = (
+    channelID: string,
+    callID: string,
+) => {
     return async (dispatch: DispatchFunc) => {
         RestClient.fetch(
             `${getPluginPath()}/calls/${channelID}/dismiss-notification`,
-            {method: 'post'},
+            { method: 'post' },
         ).catch((e) => logErr(e));
         await dispatch(removeIncomingCallNotification(callID));
         dispatch({
@@ -407,10 +493,12 @@ export const dismissIncomingCallNotification = (channelID: string, callID: strin
     };
 };
 
-export const removeIncomingCallNotification = (callID: string): ActionFunc => {
+export const removeIncomingCallNotification = (
+    callID: string,
+): ActionFuncAsync => {
     return async (dispatch: DispatchFunc) => {
-        await dispatch(stopRingingForCall(callID));
-        await dispatch({
+        dispatch(stopRingingForCall(callID));
+        dispatch({
             type: REMOVE_INCOMING_CALL,
             data: {
                 callID,
@@ -430,7 +518,7 @@ export const ringForCall = (callID: string, sound: string) => {
         }
 
         // register we've rang, so we don't ring again ever for this call
-        await dispatch({
+        dispatch({
             type: RINGING_FOR_CALL,
             data: {
                 callID,
@@ -438,12 +526,14 @@ export const ringForCall = (callID: string, sound: string) => {
         });
 
         // window.e2eRingLength is added when running the e2e tests
-        const ringLength = window.e2eRingLength ? window.e2eRingLength : RING_LENGTH;
+        const ringLength = window.e2eRingLength
+            ? window.e2eRingLength
+            : RING_LENGTH;
         setTimeout(() => dispatch(stopRingingForCall(callID)), ringLength);
     };
 };
 
-export const stopRingingForCall = (callID: string): ActionFunc => {
+export const stopRingingForCall = (callID: string): ActionFuncAsync => {
     return async (dispatch: DispatchFunc, getState: GetStateFunc) => {
         if (ringingForCall(getState(), callID)) {
             notificationsStopRinging();
@@ -458,81 +548,170 @@ export const stopRingingForCall = (callID: string): ActionFunc => {
     };
 };
 
-export const loadCallState = (channelID: string, call: CallState) => async (dispatch: DispatchFunc, getState: GetStateFunc) => {
-    const actions: AnyAction[] = [];
-
-    actions.push({
-        type: CALL_STATE,
-        data: {
-            ID: call.id,
-            channelID,
-            startAt: call.start_at,
-            ownerID: call.owner_id,
-            threadID: call.thread_id,
-        },
-    });
-
-    actions.push({
-        type: CALL_RECORDING_STATE,
-        data: {
-            callID: channelID,
-            recState: call.recording,
-        },
-    });
-
-    actions.push({
-        type: USER_SCREEN_ON,
-        data: {
-            channelID,
-            userID: call.screen_sharing_id,
-            session_id: call.screen_sharing_session_id,
-        },
-    });
-
-    actions.push({
-        type: CALL_HOST,
-        data: {
-            channelID,
-            hostID: call.host_id,
-            hostChangeAt: hostChangeAtForCurrentCall(getState()) || call.start_at,
-        },
-    });
-
-    const dismissed = call.dismissed_notification;
-    if (dismissed) {
-        const currentUserID = getCurrentUserId(getState());
-        if (Object.hasOwn(dismissed, currentUserID) && dismissed[currentUserID]) {
-            actions.push({
-                type: DISMISS_CALL,
-                data: {
-                    callID: call.id,
-                },
+export const loadProfilesByIdsIfMissing = (ids: string[]) => {
+    return async (dispatch: DispatchFunc, getState: GetStateFunc) => {
+        const missingIds = [];
+        for (const id of ids) {
+            if (!getState().entities.users.profiles[id]) {
+                missingIds.push(id);
+            }
+        }
+        if (missingIds.length > 0) {
+            dispatch({
+                type: UserTypes.RECEIVED_PROFILES,
+                data: await RestClient.getProfilesByIds(missingIds),
             });
         }
-    }
+    };
+};
 
-    const states: Record<string, UserSessionState> = {};
-    for (let i = 0; i < call.sessions.length; i++) {
-        states[call.sessions[i].session_id] = call.sessions[i];
-    }
+export const loadCallState =
+    (channelID: string, call: CallState) =>
+    (dispatch: DispatchFunc, getState: GetStateFunc) => {
+        const actions: AnyAction[] = [];
 
-    if (call.sessions.length > 0) {
         actions.push({
-            type: PROFILES_JOINED,
+            type: CALL_STATE,
             data: {
-                profiles: await getProfilesForSessions(getState(), call.sessions),
+                ID: call.id,
+                channelID,
+                startAt: call.start_at,
+                ownerID: call.owner_id,
+                threadID: call.thread_id,
+            },
+        });
+
+        actions.push({
+            type: CALL_RECORDING_STATE,
+            data: {
+                callID: channelID,
+                jobState: call.recording,
+            },
+        });
+
+        actions.push({
+            type: CALL_LIVE_CAPTIONS_STATE,
+            data: {
+                callID: channelID,
+                jobState: call.live_captions,
+            },
+        });
+
+        actions.push({
+            type: USER_SCREEN_ON,
+            data: {
+                channelID,
+                userID: call.screen_sharing_id,
+                session_id: call.screen_sharing_session_id,
+            },
+        });
+
+        actions.push({
+            type: CALL_HOST,
+            data: {
+                channelID,
+                hostID: call.host_id,
+                hostChangeAt:
+                    hostChangeAtForCurrentCall(getState()) || call.start_at,
+            },
+        });
+
+        const dismissed = call.dismissed_notification;
+        if (dismissed) {
+            const currentUserID = getCurrentUserId(getState());
+            if (
+                Object.hasOwn(dismissed, currentUserID) &&
+                dismissed[currentUserID]
+            ) {
+                actions.push({
+                    type: DISMISS_CALL,
+                    data: {
+                        callID: call.id,
+                    },
+                });
+            }
+        }
+
+        if (call.sessions.length > 0) {
+            // This is async, which is expected as we are okay with setting the state while we wait
+            // for any missing user profiles.
+            dispatch(
+                loadProfilesByIdsIfMissing(
+                    getUserIDsForSessions(call.sessions),
+                ),
+            );
+        }
+
+        actions.push({
+            type: USERS_STATES,
+            data: {
+                states: getSessionsMapFromSessions(call.sessions),
                 channelID,
             },
         });
+
+        dispatch(batchActions(actions));
+    };
+
+export const setClientConnecting = (value: boolean) => (dispatch: Dispatch) => {
+    dispatch({
+        type: CLIENT_CONNECTING,
+        data: value,
+    });
+};
+
+export const hostMake = async (callID: string, newHostID: string) => {
+    return RestClient.fetch(`${getPluginPath()}/calls/${callID}/host/make`, {
+        method: 'post',
+        body: JSON.stringify({ new_host_id: newHostID }),
+    });
+};
+
+export const hostMute = async (callID: string, sessionID: string) => {
+    return RestClient.fetch(`${getPluginPath()}/calls/${callID}/host/mute`, {
+        method: 'post',
+        body: JSON.stringify({ session_id: sessionID }),
+    });
+};
+
+export const hostScreenOff = async (callID: string, sessionID: string) => {
+    return RestClient.fetch(
+        `${getPluginPath()}/calls/${callID}/host/screen-off`,
+        {
+            method: 'post',
+            body: JSON.stringify({ session_id: sessionID }),
+        },
+    );
+};
+
+export const hostLowerHand = async (callID: string, sessionID: string) => {
+    return RestClient.fetch(
+        `${getPluginPath()}/calls/${callID}/host/lower-hand`,
+        {
+            method: 'post',
+            body: JSON.stringify({ session_id: sessionID }),
+        },
+    );
+};
+
+export const hostRemove = async (callID?: string, sessionID?: string) => {
+    if (!callID || !sessionID) {
+        return {};
     }
 
-    actions.push({
-        type: USERS_STATES,
-        data: {
-            states,
-            channelID,
-        },
+    return RestClient.fetch(`${getPluginPath()}/calls/${callID}/host/remove`, {
+        method: 'post',
+        body: JSON.stringify({ session_id: sessionID }),
     });
+};
 
-    dispatch(batchActions(actions));
+export const hostMuteOthers = async (callID?: string) => {
+    if (!callID) {
+        return {};
+    }
+
+    return RestClient.fetch(
+        `${getPluginPath()}/calls/${callID}/host/mute-others`,
+        { method: 'post' },
+    );
 };

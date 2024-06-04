@@ -1,26 +1,26 @@
-import React, {useRef} from 'react';
-import {OverlayTrigger} from 'react-bootstrap';
+import React, { useRef } from 'react';
+import { OverlayTrigger } from 'react-bootstrap';
 import CompassIcon from 'src/components/icons/compassIcon';
-import {StyledTooltip} from 'src/components/shared';
+import { StyledTooltip } from 'src/components/shared';
 import Shortcut from 'src/components/shortcut';
-import styled, {css} from 'styled-components';
+import styled, { css } from 'styled-components';
 
 export type Props = {
-    id: string,
-    icon: React.ReactNode,
-    bgColor: string,
-    bgColorHover?: string,
-    text?: string,
-    tooltipText: string,
-    tooltipSubtext?: string,
-    onToggle?: () => void,
-    unavailable?: boolean,
-    disabled?: boolean,
-    iconFill?: string,
-    iconFillHover?: string,
-    shortcut?: string,
-    margin?: string,
-}
+    id: string;
+    icon: React.ReactNode;
+    bgColor: string;
+    bgColorHover?: string;
+    text?: string;
+    tooltipText: string;
+    tooltipSubtext?: string;
+    onToggle?: () => void;
+    unavailable?: boolean;
+    disabled?: boolean;
+    iconFill?: string;
+    iconFillHover?: string;
+    shortcut?: string;
+    margin?: string;
+};
 
 export default function ControlsButton(props: Props) {
     const overlayRef = useRef();
@@ -37,7 +37,6 @@ export default function ControlsButton(props: Props) {
 
     return (
         <OverlayTrigger
-
             /* @ts-ignore */
             ref={overlayRef}
             key={props.id}
@@ -48,86 +47,121 @@ export default function ControlsButton(props: Props) {
                     $isDisabled={props.disabled}
                 >
                     <div>{props.tooltipText}</div>
-                    {props.tooltipSubtext &&
-                        <TooltipSubtext>
-                            {props.tooltipSubtext}
-                        </TooltipSubtext>
-                    }
-                    {props.shortcut &&
-                        <Shortcut shortcut={props.shortcut}/>
-                    }
+                    {props.tooltipSubtext && (
+                        <TooltipSubtext>{props.tooltipSubtext}</TooltipSubtext>
+                    )}
+                    {props.shortcut && <Shortcut shortcut={props.shortcut} />}
                 </StyledTooltip>
             }
         >
             <ButtonContainer
                 id={props.id}
-                bgColor={props.bgColor}
-                bgColorHover={props.bgColorHover}
-                margin={props.margin}
                 onClick={onClick}
                 disabled={props.disabled}
-                isDisabled={props.disabled}
-                isUnavailable={props.unavailable}
-                fill={props.iconFill}
-                fillHover={props.iconFillHover}
+                $bgColor={props.bgColor}
+                $bgColorHover={props.bgColorHover}
+                $margin={props.margin}
+                $isDisabled={props.disabled}
+                $isUnavailable={props.unavailable}
+                $fill={props.iconFill}
+                $fillHover={props.iconFillHover}
             >
                 <ButtonIcon>
                     {props.icon}
-                    {props.unavailable &&
+                    {props.unavailable && (
                         <UnavailableIcon>
-                            <CompassIcon icon='close-circle'/>
+                            <CompassIcon icon='close-circle' />
                         </UnavailableIcon>
-                    }
+                    )}
                 </ButtonIcon>
-                {props.text &&
-                    <ButtonText>{props.text}</ButtonText>
-                }
+                {props.text && <ButtonText>{props.text}</ButtonText>}
             </ButtonContainer>
         </OverlayTrigger>
     );
 }
 
+export const MentionsCounter = styled.span`
+    font-weight: 700;
+    font-size: 11px;
+    line-height: 12px;
+    color: var(--button-color);
+    padding: 0 2.5px;
+`;
+
+export const UnreadDot = styled.span<{ $padding: string }>`
+    position: absolute;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 1;
+    top: 0;
+    right: 0;
+    transform: translate(50%, -50%);
+    min-width: 8px;
+    min-height: 8px;
+    padding: ${({ $padding }) => $padding || 0};
+    background: var(--sidebar-text-active-border);
+    border-radius: 8px;
+    border: 2px solid color-mix(in srgb, var(--calls-bg), white 8%);
+    box-sizing: content-box;
+`;
+
+export const CallThreadIcon = styled.div`
+    position: relative;
+`;
+
 type ButtonContainerProps = {
-    bgColor: string,
-    bgColorHover?: string,
-    margin?: string,
-    isDisabled?: boolean,
-    isUnavailable?: boolean,
-    fill?: string,
-    fillHover?: string,
-}
+    $bgColor: string;
+    $bgColorHover?: string;
+    $margin?: string;
+    $isDisabled?: boolean;
+    $isUnavailable?: boolean;
+    $fill?: string;
+    $fillHover?: string;
+};
 
 const ButtonContainer = styled.button<ButtonContainerProps>`
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    margin: ${({margin}) => margin || '0 8px'};
+    margin: ${({ $margin }) => $margin || '0'};
     border-radius: 8px;
     padding: 12px;
     border: none;
-    background: ${({bgColor}) => bgColor || 'rgba(var(--button-color-rgb), 0.08)'};
+    background: ${({ $bgColor }) =>
+        $bgColor || 'rgba(var(--button-color-rgb), 0.08)'};
 
-    :hover {
-      background: ${({bgColorHover}) => bgColorHover || 'rgba(var(--button-color-rgb), 0.12)'};
+    &:hover {
+        background: ${({ $bgColorHover }) =>
+            $bgColorHover || 'rgba(var(--button-color-rgb), 0.12)'};
+        background-blend-mode: multiply;
 
-      svg {
-        fill: ${({fillHover}) => fillHover || 'var(--button-color)'};
-      }
+        svg {
+            fill: ${({ $fillHover }) => $fillHover || 'var(--button-color)'};
+        }
+    }
+
+    &:hover ${UnreadDot} {
+        border: 2px solid color-mix(in srgb, var(--calls-bg), white 12%);
     }
 
     svg {
-      fill: ${({fill}) => fill || 'rgba(var(--button-color-rgb), 0.56)'};
-      ${({isDisabled, isUnavailable}) => (isDisabled || isUnavailable) && css`
-        fill: rgba(var(--button-color-rgb), 0.32);
-      `}
+        fill: ${({ $fill }) => $fill || 'rgba(var(--button-color-rgb), 0.56)'};
+        ${({ $isDisabled, $isUnavailable }) =>
+            ($isDisabled || $isUnavailable) &&
+            css`
+                fill: rgba(var(--button-color-rgb), 0.32);
+            `}
     }
 
-    ${({isDisabled, isUnavailable}) => (isDisabled || isUnavailable) && css`
-      :hover {
-          background: rgba(var(--button-color-rgb), 0.08);
-      }
-    `}
+    ${({ $isDisabled, $isUnavailable }) =>
+        ($isDisabled || $isUnavailable) &&
+        css`
+            &:hover {
+                background: rgba(var(--button-color-rgb), 0.08);
+            }
+        `}
 `;
 
 const ButtonText = styled.span`

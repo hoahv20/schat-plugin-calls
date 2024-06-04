@@ -9,11 +9,14 @@ import '@mattermost/compass-icons/css/compass-icons.css';
 
 import {
     CallHostChangedData,
-    CallRecordingStateData,
+    CallJobStateData,
     CallStartData,
     CallStateData,
     EmptyData,
     HelloData,
+    HostControlLowerHand,
+    HostControlMsg,
+    HostControlRemoved,
     UserDismissedNotification,
     UserJoinedData,
     UserLeftData,
@@ -24,15 +27,16 @@ import {
     UserScreenOnOffData,
     UserVoiceOnOffData,
     WebsocketEventData,
-} from '@calls/common/lib/types';
+} from '@mattermost/calls-common/lib/types';
 import {WebSocketMessage} from '@mattermost/client/websocket';
 import type {DesktopAPI} from '@mattermost/desktop-api';
 import {setServerVersion} from 'mattermost-redux/actions/general';
+import {Client4} from 'mattermost-redux/client';
 import {getChannel} from 'mattermost-redux/selectors/entities/channels';
 import {getConfig} from 'mattermost-redux/selectors/entities/general';
 import {getTheme, Theme} from 'mattermost-redux/selectors/entities/preferences';
 import configureStore from 'mattermost-redux/store';
-import {getCallsConfig} from 'plugin/actions';
+import {getCallsConfig, setClientConnecting} from 'plugin/actions';
 import CallsClient from 'plugin/client';
 import {
     logDebug,
@@ -50,9 +54,13 @@ import {
 import {
     handleCallEnd,
     handleCallHostChanged,
-    handleCallRecordingState,
+    handleCallJobState,
     handleCallStart,
     handleCallState,
+    handleHostLowerHand,
+    handleHostMute,
+    handleHostRemoved,
+    handleHostScreenOff,
     handleUserDismissedNotification,
     handleUserJoined,
     handleUserLeft,
@@ -90,6 +98,7 @@ function connectCall(
     joinData: CallsClientJoinData,
     clientConfig: CallsClientConfig,
     wsEventHandler: (ev: WebSocketMessage<WebsocketEventData>) => void,
+    store: Store,
     closeCb?: (err?: Error) => void,
 ) {
     try {
@@ -101,7 +110,10 @@ function connectCall(
         window.callsClient = new CallsClient(clientConfig);
         window.currentCallData = CurrentCallDataDefault;
 
+        window.callsClient.on('connect', () => store.dispatch(setClientConnecting(false)));
+
         window.callsClient.on('close', (err?: Error) => {
+            store.dispatch(setClientConnecting(false));
             if (closeCb) {
                 closeCb(err);
             }
@@ -110,11 +122,14 @@ function connectCall(
         window.callsClient.init(joinData).then(() => {
             window.callsClient?.ws?.on('event', wsEventHandler);
         }).catch((err: Error) => {
+            store.dispatch(setClientConnecting(false));
             logErr(err);
             if (closeCb) {
                 closeCb(err);
             }
         });
+
+        store.dispatch(setClientConnecting(true));
     } catch (err) {
         logErr(err);
         if (closeCb) {
@@ -162,7 +177,11 @@ export default async function init(cfg: InitConfig) {
 
     // Setting the base URL if present, in case MM is running under a subpath.
     if (window.basename) {
+        // If present, we need to set the basename on both the client we use (RestClient)
+        // and the default one (Client4) used by internal Redux actions. Not doing so
+        // would break Calls widget on installations served under a subpath.
         RestClient.setUrl(window.basename);
+        Client4.setUrl(window.basename);
     }
     RestClient.setToken(getToken());
 
@@ -201,7 +220,7 @@ export default async function init(cfg: InitConfig) {
         simulcast: callsConfig(store.getState()).EnableSimulcast,
     };
 
-    connectCall(joinData, clientConfig, async (ev) => {
+    connectCall(joinData, clientConfig, (ev) => {
         switch (ev.event) {
         case 'hello':
             store.dispatch(setServerVersion((ev.data as HelloData).server_version));
@@ -248,14 +267,26 @@ export default async function init(cfg: InitConfig) {
         case `custom_${pluginId}_user_reacted`:
             handleUserReaction(store, ev as WebSocketMessage<UserReactionData>);
             break;
-        case `custom_${pluginId}_call_recording_state`:
-            handleCallRecordingState(store, ev as WebSocketMessage<CallRecordingStateData>);
+        case `custom_${pluginId}_call_job_state`:
+            handleCallJobState(store, ev as WebSocketMessage<CallJobStateData>);
             break;
         case `custom_${pluginId}_user_dismissed_notification`:
             handleUserDismissedNotification(store, ev as WebSocketMessage<UserDismissedNotification>);
             break;
         case `custom_${pluginId}_call_state`:
-            await handleCallState(store, ev as WebSocketMessage<CallStateData>);
+            handleCallState(store, ev as WebSocketMessage<CallStateData>);
+            break;
+        case `custom_${pluginId}_host_mute`:
+            handleHostMute(store, ev as WebSocketMessage<HostControlMsg>);
+            break;
+        case `custom_${pluginId}_host_screen_off`:
+            handleHostScreenOff(store, ev as WebSocketMessage<HostControlMsg>);
+            break;
+        case `custom_${pluginId}_host_lower_hand`:
+            handleHostLowerHand(store, ev as WebSocketMessage<HostControlLowerHand>);
+            break;
+        case `custom_${pluginId}_host_removed`:
+            handleHostRemoved(store, ev as WebSocketMessage<HostControlRemoved>);
             break;
         case 'user_removed':
             handleUserRemovedFromChannel(store, ev as WebSocketMessage<UserRemovedData>);
@@ -266,7 +297,7 @@ export default async function init(cfg: InitConfig) {
         if (cfg.wsHandler) {
             cfg.wsHandler(store, ev);
         }
-    }, cfg.closeCb);
+    }, store, cfg.closeCb);
 
     const theme = getTheme(store.getState());
     applyTheme(theme);

@@ -1,17 +1,28 @@
-import {GlobalState} from '@mattermost/types/store';
-import {getChannel} from 'mattermost-redux/selectors/entities/channels';
-import {getCurrentTeamId, getMyTeams, getTeam} from 'mattermost-redux/selectors/entities/teams';
-import {getCurrentUserId} from 'mattermost-redux/selectors/entities/users';
-import {injectIntl} from 'react-intl';
-import {connect} from 'react-redux';
-import {bindActionCreators, Dispatch} from 'redux';
-import {recordingPromptDismissedAt, showExpandedView, showScreenSourceModal, trackEvent} from 'src/actions';
+import { GlobalState } from '@mattermost/types/store';
+import { getChannel } from 'mattermost-redux/selectors/entities/channels';
+import {
+    getCurrentTeamId,
+    getMyTeams,
+    getTeam,
+} from 'mattermost-redux/selectors/entities/teams';
+import { getCurrentUserId } from 'mattermost-redux/selectors/entities/users';
+import { injectIntl } from 'react-intl';
+import { connect } from 'react-redux';
+import { bindActionCreators, Dispatch } from 'redux';
+import {
+    recordingPromptDismissedAt,
+    showExpandedView,
+    showScreenSourceModal,
+    trackEvent,
+} from 'src/actions';
 import {
     allowScreenSharing,
     callStartAtForCurrentCall,
+    clientConnecting,
     expandedView,
     getChannelUrlAndDisplayName,
     hostChangeAtForCurrentCall,
+    hostControlNoticesForCurrentCall,
     hostIDForCurrentCall,
     profilesInCurrentCallMap,
     recentlyJoinedUsersInCurrentCall,
@@ -19,10 +30,11 @@ import {
     screenSharingSessionForCurrentCall,
     sessionForCurrentCall,
     sessionsInCurrentCall,
+    sessionsInCurrentCallMap,
     sortedIncomingCalls,
     transcriptionsEnabled,
 } from 'src/selectors';
-import {alphaSortSessions, stateSortSessions} from 'src/utils';
+import { alphaSortSessions, stateSortSessions } from 'src/utils';
 
 import CallWidget from './component';
 
@@ -41,7 +53,10 @@ const mapStateToProps = (state: GlobalState) => {
         .sort(alphaSortSessions(profiles))
         .sort(stateSortSessions(screenSharingSession?.session_id || '', true));
 
-    const {channelURL, channelDisplayName} = getChannelUrlAndDisplayName(state, channel);
+    const { channelURL, channelDisplayName } = getChannelUrlAndDisplayName(
+        state,
+        channel,
+    );
 
     return {
         currentUserID,
@@ -50,6 +65,7 @@ const mapStateToProps = (state: GlobalState) => {
         channelURL,
         channelDisplayName,
         sessions,
+        sessionsMap: sessionsInCurrentCallMap(state),
         currentSession: sessionForCurrentCall(state),
         profiles,
         callStartAt: callStartAtForCurrentCall(state),
@@ -60,18 +76,25 @@ const mapStateToProps = (state: GlobalState) => {
         allowScreenSharing: allowScreenSharing(state),
         show: !expandedView(state),
         recentlyJoinedUsers: recentlyJoinedUsersInCurrentCall(state),
+        hostNotices: hostControlNoticesForCurrentCall(state),
         wider: getMyTeams(state)?.length > 1,
         callsIncoming: sortedIncomingCalls(state),
         transcriptionsEnabled: transcriptionsEnabled(state),
+        clientConnecting: clientConnecting(state),
     };
 };
 
-const mapDispatchToProps = (dispatch: Dispatch) => bindActionCreators({
-    showExpandedView,
-    showScreenSourceModal,
-    trackEvent,
-    recordingPromptDismissedAt,
-}, dispatch);
+const mapDispatchToProps = (dispatch: Dispatch) =>
+    bindActionCreators(
+        {
+            showExpandedView,
+            showScreenSourceModal,
+            trackEvent,
+            recordingPromptDismissedAt,
+        },
+        dispatch,
+    );
 
-export default injectIntl(connect(mapStateToProps, mapDispatchToProps)(CallWidget));
-
+export default injectIntl(
+    connect(mapStateToProps, mapDispatchToProps)(CallWidget),
+);

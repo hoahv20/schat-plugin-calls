@@ -8,14 +8,31 @@ type JobType string
 
 const (
 	JobTypeRecording    JobType = "recording"
-	JobTypeTranscribing         = "transcribing"
+	JobTypeTranscribing JobType = "transcribing"
+	JobTypeCaptioning   JobType = "captioning"
 )
+
+func (t JobType) IsValid() error {
+	if t == "" {
+		return fmt.Errorf("should not be empty")
+	}
+
+	switch t {
+	case JobTypeRecording:
+	case JobTypeTranscribing:
+	case JobTypeCaptioning:
+	default:
+		return fmt.Errorf("invalid job type %q", t)
+	}
+
+	return nil
+}
 
 type JobStatusType string
 
 const (
 	JobStatusTypeStarted JobStatusType = "started"
-	JobStatusTypeFailed                = "failed"
+	JobStatusTypeFailed  JobStatusType = "failed"
 )
 
 type JobStatus struct {
@@ -41,6 +58,26 @@ type Transcription struct {
 }
 
 type Transcriptions []Transcription
+
+type CaptionMsg struct {
+	SessionID     string  `json:"session_id"`
+	UserID        string  `json:"user_id"`
+	Text          string  `json:"text"`
+	NewAudioLenMs float64 `json:"new_audio_len_ms"`
+}
+
+type MetricName string
+
+const (
+	MetricLiveCaptionsWindowDropped       MetricName = "live_captions_window_dropped"
+	MetricLiveCaptionsTranscriberBufFull  MetricName = "live_captions_transcriber_buf_full"
+	MetricLiveCaptionsPktPayloadChBufFull MetricName = "live_captions_pktPayloadCh_buf_full"
+)
+
+type MetricMsg struct {
+	SessionID  string     `json:"session_id"`
+	MetricName MetricName `json:"metric_name"`
+}
 
 type TranscribingJobInfo struct {
 	// Transcribing job ID

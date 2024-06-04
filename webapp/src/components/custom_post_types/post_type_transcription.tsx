@@ -38,12 +38,12 @@ const CreateMeetingSummaryButton = styled.button`
 	font-weight: 600;
 	line-height: 16px;
 
-	:hover {
+	&:hover {
 		background: rgba(var(--center-channel-color-rgb), 0.12);
         color: rgba(var(--center-channel-color-rgb), 0.72);
 	}
 
-	:active {
+	&:active {
 		background: rgba(var(--button-bg-rgb), 0.08);
 		color: var(--button-bg);
 	}
@@ -71,7 +71,7 @@ export const PostTypeTranscription = (props: Props) => {
                 onClick={createMeetingSummary}
             >
                 <IconAI/>
-                <FormattedMessage defaultMessage={'Create meeting summary?'}/>
+                <FormattedMessage defaultMessage={'Create meeting summary'}/>
             </CreateMeetingSummaryButton>
             }
         </div>

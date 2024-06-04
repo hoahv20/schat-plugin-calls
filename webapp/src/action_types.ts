@@ -7,8 +7,6 @@ export const USER_UNMUTED = pluginId + '_user_unmuted';
 export const USER_VOICE_ON = pluginId + '_user_voice_on';
 export const USER_VOICE_OFF = pluginId + '_user_voice_off';
 export const USERS_STATES = pluginId + '_users_states';
-export const PROFILE_JOINED = pluginId + '_profile_joined';
-export const PROFILES_JOINED = pluginId + '_profiles_joined';
 export const CALL_STATE = pluginId + '_call_state';
 export const USER_SCREEN_ON = pluginId + '_screen_on';
 export const USER_SCREEN_OFF = pluginId + '_screen_off';
@@ -19,8 +17,13 @@ export const USER_REACTED = pluginId + '_user_reacted';
 export const USER_REACTED_TIMEOUT = pluginId + '_user_reacted_timeout';
 export const CALL_HOST = pluginId + '_call_host';
 export const CALL_RECORDING_STATE = pluginId + '_call_recording_state';
+export const CALL_LIVE_CAPTIONS_STATE = pluginId + '_call_live_captions_state';
 export const CALL_REC_PROMPT_DISMISSED = pluginId + '_call_rec_prompt_dismissed';
 export const USER_JOINED_TIMEOUT = pluginId + '_user_joined_timeout';
+export const LIVE_CAPTION = pluginId + '_live_caption';
+export const LIVE_CAPTION_TIMEOUT_EVENT = pluginId + '_live_caption_timeout_event';
+export const HOST_CONTROL_NOTICE = pluginId + '_host_control_notice';
+export const HOST_CONTROL_NOTICE_TIMEOUT_EVENT = pluginId + '_host_control_notice_timeout_event';
 
 export const SHOW_EXPANDED_VIEW = pluginId + '_show_expanded_view';
 export const HIDE_EXPANDED_VIEW = pluginId + '_hide_expanded_view';
@@ -43,9 +46,12 @@ export const CALL_END = pluginId + '_call_end';
 export const RECEIVED_CALLS_CONFIG = pluginId + '_received_calls_config';
 export const RECORDINGS_ENABLED = pluginId + '_recordings_enabled';
 export const TRANSCRIPTIONS_ENABLED = pluginId + '_transcriptions_enabled';
+export const LIVE_CAPTIONS_ENABLED = pluginId + '_live_captions_enabled';
 export const RTCD_ENABLED = pluginId + '_rtcd_enabled';
 export const RECEIVED_CHANNEL_STATE = pluginId + 'received_channel_state';
 export const RECEIVED_CALLS_USER_PREFERENCES = pluginId + '_received_calls_user_preferences';
 
 export const DESKTOP_WIDGET_CONNECTED = pluginId + '_desktop_widget_connected';
+
+export const CLIENT_CONNECTING = pluginId + '_client_connecting';
 

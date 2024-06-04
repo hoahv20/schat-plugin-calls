@@ -6,6 +6,9 @@ package main
 import (
 	"testing"
 
+	pluginMocks "github.com/mattermost/mattermost-plugin-calls/server/mocks/github.com/mattermost/mattermost/server/public/plugin"
+	"github.com/mattermost/mattermost/server/public/plugin"
+
 	"github.com/mattermost/mattermost/server/public/model"
 	"github.com/stretchr/testify/require"
 )
@@ -114,6 +117,82 @@ func TestConfigurationIsValid(t *testing.T) {
 			err: "ICEHostPortOverride is not valid: 45 is not in allowed range [80, 49151]",
 		},
 		{
+			name: "invalid LiveCaptionsModelSize",
+			input: func() configuration {
+				var cfg configuration
+				cfg.SetDefaults()
+				cfg.EnableRecordings = model.NewBool(true)
+				cfg.EnableTranscriptions = model.NewBool(true)
+				cfg.EnableLiveCaptions = model.NewBool(true)
+				cfg.LiveCaptionsModelSize = ""
+				return cfg
+			}(),
+			err: "LiveCaptionsModelSize is not valid",
+		},
+		{
+			name: "invalid LiveCaptionsNumTranscribers",
+			input: func() configuration {
+				var cfg configuration
+				cfg.SetDefaults()
+				cfg.EnableRecordings = model.NewBool(true)
+				cfg.EnableTranscriptions = model.NewBool(true)
+				cfg.EnableLiveCaptions = model.NewBool(true)
+				cfg.LiveCaptionsNumTranscribers = model.NewInt(0)
+				return cfg
+			}(),
+			err: "LiveCaptionsNumTranscribers is not valid: should be greater than 0",
+		},
+		{
+			name: "invalid LiveCaptionsNumThreadsPerTranscriber",
+			input: func() configuration {
+				var cfg configuration
+				cfg.SetDefaults()
+				cfg.EnableRecordings = model.NewBool(true)
+				cfg.EnableTranscriptions = model.NewBool(true)
+				cfg.EnableLiveCaptions = model.NewBool(true)
+				cfg.LiveCaptionsNumThreadsPerTranscriber = model.NewInt(0)
+				return cfg
+			}(),
+			err: "LiveCaptionsNumThreadsPerTranscriber is not valid: should be greater than 0",
+		},
+		{
+			name: "blank LiveCaptionsLanguage is valid",
+			input: func() configuration {
+				var cfg configuration
+				cfg.SetDefaults()
+				cfg.EnableRecordings = model.NewBool(true)
+				cfg.EnableTranscriptions = model.NewBool(true)
+				cfg.EnableLiveCaptions = model.NewBool(true)
+				cfg.LiveCaptionsLanguage = ""
+				return cfg
+			}(),
+		},
+		{
+			name: "invalid LiveCaptionsLanguage",
+			input: func() configuration {
+				var cfg configuration
+				cfg.SetDefaults()
+				cfg.EnableRecordings = model.NewBool(true)
+				cfg.EnableTranscriptions = model.NewBool(true)
+				cfg.EnableLiveCaptions = model.NewBool(true)
+				cfg.LiveCaptionsLanguage = "inv"
+				return cfg
+			}(),
+			err: "LiveCaptionsLanguage is not valid: should be a 2-letter ISO 639 set 1 language code, or blank for default",
+		},
+		{
+			name: "invalid TranscriberNumThreads",
+			input: func() configuration {
+				var cfg configuration
+				cfg.SetDefaults()
+				cfg.EnableRecordings = model.NewBool(true)
+				cfg.EnableTranscriptions = model.NewBool(true)
+				cfg.TranscriberNumThreads = model.NewInt(0)
+				return cfg
+			}(),
+			err: "TranscriberNumThreads is not valid: should be greater than 0",
+		},
+		{
 			name:  "defaults",
 			input: defaultConfig,
 		},
@@ -132,19 +211,39 @@ func TestConfigurationIsValid(t *testing.T) {
 }
 
 func TestGetClientConfig(t *testing.T) {
-	cfg := &configuration{}
-	cfg.SetDefaults()
-	clientCfg := cfg.getClientConfig()
+	mockAPI := &pluginMocks.MockAPI{}
+
+	p := &Plugin{
+		MattermostPlugin: plugin.MattermostPlugin{
+			API: mockAPI,
+		},
+	}
+
+	mockAPI.On("GetLicense").Return(&model.License{
+		SkuShortName: "starter",
+	})
+	mockAPI.On("GetConfig").Return(&model.Config{})
+
+	clientCfg := p.getClientConfig()
 
 	// defaults
 	require.Equal(t, model.NewBool(true), clientCfg.AllowEnableCalls)
-	require.Equal(t, cfg.AllowEnableCalls, clientCfg.AllowEnableCalls)
+	require.Equal(t, p.getConfiguration().AllowEnableCalls, clientCfg.AllowEnableCalls)
 	require.Equal(t, model.NewBool(false), clientCfg.DefaultEnabled)
-	require.Equal(t, cfg.DefaultEnabled, clientCfg.DefaultEnabled)
+	require.Equal(t, p.getConfiguration().DefaultEnabled, clientCfg.DefaultEnabled)
 
-	*cfg.AllowEnableCalls = false
-	*cfg.DefaultEnabled = true
-	clientCfg = cfg.getClientConfig()
+	*p.configuration.AllowEnableCalls = false
+	*p.configuration.DefaultEnabled = true
+	clientCfg = p.getClientConfig()
 	require.Equal(t, true, *clientCfg.AllowEnableCalls)
-	require.Equal(t, cfg.DefaultEnabled, clientCfg.DefaultEnabled)
+	require.Equal(t, p.getConfiguration().DefaultEnabled, clientCfg.DefaultEnabled)
+
+	// Host controls
+	require.Equal(t, false, clientCfg.HostControlsAllowed)
+	mockAPI.On("GetLicense").Unset()
+	mockAPI.On("GetLicense").Return(&model.License{
+		SkuShortName: "professional",
+	})
+	clientCfg = p.getClientConfig()
+	require.Equal(t, true, clientCfg.HostControlsAllowed)
 }

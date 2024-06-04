@@ -1,7 +1,6 @@
 // Copyright (c) 2015-present Mattermost, Inc. All Rights Reserved.
 // See LICENSE.txt for license information.
 
-import {Thunk} from 'mattermost-redux/types/actions';
 import React, {ComponentProps} from 'react';
 import {useIntl} from 'react-intl';
 import {useDispatch, useSelector} from 'react-redux';
@@ -33,7 +32,7 @@ export const CloudFreeTrialModalUser = (modalProps: Props) => {
             onHide={() => null}
             components={{FooterContainer}}
         >
-            <VerticalSpacer size={22}/>
+            <VerticalSpacer $size={22}/>
             <p>{formatMessage({defaultMessage: 'Calls are a quick, audio-first, way to interact with your team. Get the full calls experience when you start a free, 30-day trial.'})}</p>
             <p>{formatMessage({defaultMessage: 'Select Notify admin to send an automatic request to your system admins to start the trial.'})}</p>
         </SizedGenericModal>
@@ -51,7 +50,7 @@ export const CloudFreeTrialModalAdmin = (modalProps: Props) => {
     let headerText = formatMessage({defaultMessage: 'Try channel calls with a free trial'});
     let confirmButtonText = formatMessage({defaultMessage: 'Try free for 30 days'});
     let bodyText = formatMessage({defaultMessage: 'Calls are a quick, audio-first, way to interact with your team. Get the full calls experience when you start a free, 30-day trial.'});
-    let confirmThunk: Thunk = displayCloudPricing();
+    let confirmThunk = displayCloudPricing();
 
     if (trialTaken) {
         headerText = formatMessage({defaultMessage: 'Upgrade to use calls in Channels'});
@@ -72,7 +71,7 @@ export const CloudFreeTrialModalAdmin = (modalProps: Props) => {
             onHide={() => null}
             components={{FooterContainer}}
         >
-            <VerticalSpacer size={22}/>
+            <VerticalSpacer $size={22}/>
             {bodyText}
         </SizedGenericModal>
     );

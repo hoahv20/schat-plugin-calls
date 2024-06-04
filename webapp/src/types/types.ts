@@ -1,8 +1,12 @@
 // Copyright (c) 2015-present Mattermost, Inc. All Rights Reserved.
 // See LICENSE.txt for license information.
 
-import {CallsConfig, RTCStats} from '@calls/common/lib/types';
-import {MessageDescriptor} from 'react-intl';
+import {
+    CallsConfig,
+    LiveCaption,
+    RTCStats,
+} from '@mattermost/calls-common/lib/types';
+import { MessageDescriptor } from 'react-intl';
 
 export const CallsConfigDefault: CallsConfig = {
     ICEServers: [],
@@ -17,12 +21,14 @@ export const CallsConfigDefault: CallsConfig = {
     EnableSimulcast: false,
     EnableRinging: true,
     EnableTranscriptions: false,
+    EnableLiveCaptions: false,
+    HostControlsAllowed: false,
 };
 
 export type ChannelState = {
     id: string;
     enabled?: boolean;
-}
+};
 
 export type CallsClientJoinData = {
     channelID: string;
@@ -33,19 +39,19 @@ export type CallsClientJoinData = {
     // jobID is the id of the job tight to the bot connection to
     // a call (e.g. recording, transcription).
     jobID?: string;
-}
+};
 
 export type CallsClientConfig = {
     wsURL: string;
     authToken?: string;
     iceServers: RTCIceServer[];
     simulcast?: boolean;
-}
+};
 
 export type AudioDevices = {
     inputs: MediaDeviceInfo[];
     outputs: MediaDeviceInfo[];
-}
+};
 
 export type TrackInfo = {
     id: string;
@@ -54,18 +60,18 @@ export type TrackInfo = {
     label: string;
     enabled: boolean;
     readyState: MediaStreamTrackState;
-}
+};
 
 export type CallsClientStats = {
     initTime: number;
     callID: string;
     tracksInfo: TrackInfo[];
     rtcStats: RTCStats | null;
-}
+};
 
 export type CallsUserPreferences = {
     joinSoundParticipantsThreshold: number;
-}
+};
 
 export const CallsUserPreferencesDefault = {
     joinSoundParticipantsThreshold: 8,
@@ -83,16 +89,16 @@ export type CallAlertConfig = {
     tooltipText?: MessageDescriptor;
     tooltipSubtext?: MessageDescriptor;
     dismissable: boolean;
-}
+};
 
 export type CallAlertState = {
     active: boolean;
     show: boolean;
-}
+};
 
 export type CallAlertStates = {
     [key: string]: CallAlertState;
-}
+};
 
 export const CallAlertStatesDefault = {
     missingAudioInput: {
@@ -113,21 +119,21 @@ export const CallAlertStatesDefault = {
     },
 };
 
-export type CallRecordingReduxState = {
+export type CallJobReduxState = {
     init_at: number;
     start_at: number;
     end_at: number;
     err?: string;
     error_at?: number;
     prompt_dismissed_at?: number;
-}
+};
 
 export type CapturerSource = {
     id: string;
     name: string;
     thumbnailURL: string;
     display_id: string;
-}
+};
 
 // currentCallData (of type CurrentCallData) is attached to the widget's window to keep persistent data across
 // the various call windows. As a simple rule, if a child window (eg, ExpandedViewWindow) sets data,
@@ -136,7 +142,7 @@ export type CapturerSource = {
 // Reminder: obviously this is not reactive; setting data will not update the other window.
 export type CurrentCallData = {
     recordingPromptDismissedAt: number;
-}
+};
 
 export const CurrentCallDataDefault: CurrentCallData = {
     recordingPromptDismissedAt: 0,
@@ -145,12 +151,15 @@ export const CurrentCallDataDefault: CurrentCallData = {
 // Similar to currentCallData, callActions is a cross-window function to trigger a change in that
 // owning window. recordingPromptDismissedAt should be set by that window's init function or constructor.
 export type CallActions = {
-    setRecordingPromptDismissedAt: (callId: string, dismissedAt: number) => void;
-}
+    setRecordingPromptDismissedAt: (
+        callId: string,
+        dismissedAt: number,
+    ) => void;
+};
 
 export enum ChannelType {
     DM,
-    GM
+    GM,
 }
 
 export type IncomingCallNotification = {
@@ -159,7 +168,31 @@ export type IncomingCallNotification = {
     callerID: string;
     startAt: number;
     type: ChannelType;
+};
+
+export enum HostControlNoticeType {
+    LowerHand,
+    HostChanged,
+    HostRemoved,
 }
+
+export type HostControlNotice = {
+    type: HostControlNoticeType;
+    callID: string;
+    noticeID: string;
+    displayName: string;
+    userID?: string;
+};
+
+export type HostControlNoticeTimeout = {
+    callID: string;
+    noticeID: string;
+};
+
+export type RemoveConfirmationData = {
+    sessionID: string;
+    userID: string;
+};
 
 // From webapp because the constants file is not import friendly.
 export const UserStatuses = {
@@ -179,7 +212,11 @@ export type RealNewPostMessageProps = {
     sender_name: string; // @username
     set_online: boolean;
     team_id: string;
-}
+};
+
+export type LiveCaptions = {
+    [sessionID: string]: LiveCaption;
+};
 
 // Desktop types
 
@@ -189,4 +226,4 @@ export type CallsDesktopJoinResponse = {
 
     // DEPRECATED: legacy Desktop API logic (<= 5.6.0)
     type?: string;
-}
+};

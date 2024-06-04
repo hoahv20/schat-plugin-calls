@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/mattermost/mattermost-plugin-calls/server/cluster"
-	"github.com/mattermost/mattermost-plugin-calls/server/enterprise"
 
 	"github.com/mattermost/rtcd/service/rtc"
 
@@ -63,8 +62,6 @@ func (p *Plugin) OnActivate() error {
 		return err
 	}
 
-	p.licenseChecker = enterprise.NewLicenseChecker(p.API)
-
 	if p.isSingleHandler() {
 		if err := p.cleanUpState(); err != nil {
 			p.LogError(err.Error())
@@ -113,18 +110,18 @@ func (p *Plugin) OnActivate() error {
 	}
 	p.botSession = session
 
-	if p.licenseChecker.RecordingsAllowed() && cfg.recordingsEnabled() {
+	if cfg.recordingsEnabled() {
 		go func() {
 			if err := p.initJobService(); err != nil {
 				err = fmt.Errorf("failed to initialize job service: %w", err)
 				p.LogError(err.Error())
 				return
 			}
-			p.LogDebug("job service initialized successfully")
+			p.LogDebug("job service initialized successfully", "job<<<<<", p.jobService)
 		}()
 	}
 
-	if rtcdURL := cfg.getRTCDURL(); rtcdURL != "" && p.licenseChecker.RTCDAllowed() {
+	if rtcdURL := cfg.getRTCDURL(); rtcdURL != "" {
 		rtcdManager, err := p.newRTCDClientManager(rtcdURL)
 		if err != nil {
 			err = fmt.Errorf("failed to create rtcd manager: %w", err)
@@ -182,7 +179,7 @@ func (p *Plugin) OnActivate() error {
 		rtcServerConfig.TURNConfig.StaticAuthSecret = cfg.TURNStaticAuthSecret
 	}
 	if cfg.ICEHostPortOverride != nil {
-		rtcServerConfig.ICEHostPortOverride = *cfg.ICEHostPortOverride
+		rtcServerConfig.ICEHostPortOverride = rtc.ICEHostPortOverride(fmt.Sprintf("%d", *cfg.ICEHostPortOverride))
 	}
 	rtcServer, err := rtc.NewServer(rtcServerConfig, newLogger(p), p.metrics.RTCMetrics())
 	if err != nil {
@@ -212,10 +209,8 @@ func (p *Plugin) OnDeactivate() error {
 	p.LogDebug("deactivate")
 	close(p.stopCh)
 
-	if p.wDB != nil {
-		if err := p.wDB.Close(); err != nil {
-			p.LogError(err.Error())
-		}
+	if err := p.store.Close(); err != nil {
+		p.LogError(err.Error())
 	}
 
 	if p.rtcdManager != nil {

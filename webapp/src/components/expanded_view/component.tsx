@@ -3,35 +3,34 @@
 // Copyright (c) 2015-present Mattermost, Inc. All Rights Reserved.
 // See LICENSE.txt for license information.
 
-import './component.scss';
-
-import {mosThreshold} from '@calls/common';
+import { mosThreshold } from '@mattermost/calls-common';
+import { UserSessionState } from '@mattermost/calls-common/lib/types';
+import { Channel } from '@mattermost/types/channels';
+import { Post } from '@mattermost/types/posts';
+import { Team } from '@mattermost/types/teams';
+import { UserProfile } from '@mattermost/types/users';
+import { IDMappedObjects } from '@mattermost/types/utilities';
+import { Client4 } from 'mattermost-redux/client';
+import { Theme } from 'mattermost-redux/selectors/entities/preferences';
 import {
-    UserSessionState,
-} from '@calls/common/lib/types';
-import {Channel} from '@mattermost/types/channels';
-import {Post} from '@mattermost/types/posts';
-import {Team} from '@mattermost/types/teams';
-import {UserProfile} from '@mattermost/types/users';
-import {Client4} from 'mattermost-redux/client';
-import {Theme} from 'mattermost-redux/selectors/entities/preferences';
-import {MediaControlBar, MediaController, MediaFullscreenButton} from 'media-chrome/dist/react';
-import React, {CSSProperties} from 'react';
-import {OverlayTrigger, Tooltip} from 'react-bootstrap';
-import {IntlShape} from 'react-intl';
-import {RouteComponentProps} from 'react-router-dom';
-import {compareSemVer} from 'semver-parser';
-import {
-    stopCallRecording,
-} from 'src/actions';
-import Avatar from 'src/components/avatar/avatar';
-import {Badge, HostBadge} from 'src/components/badge';
+    MediaControlBar,
+    MediaController,
+    MediaFullscreenButton,
+} from 'media-chrome/dist/react';
+import React from 'react';
+import { OverlayTrigger, Tooltip } from 'react-bootstrap';
+import { IntlShape } from 'react-intl';
+import { RouteComponentProps } from 'react-router-dom';
+import { compareSemVer } from 'semver-parser';
+import { hostMuteOthers, hostRemove, stopCallRecording } from 'src/actions';
+import { Badge } from 'src/components/badge';
 import CallDuration from 'src/components/call_widget/call_duration';
-import {Emoji} from 'src/components/emoji/emoji';
+import CallParticipantRHS from 'src/components/expanded_view/call_participant_rhs';
+import { LiveCaptionsStream } from 'src/components/expanded_view/live_captions_stream';
+import CCIcon from 'src/components/icons/cc_icon';
 import ChatThreadIcon from 'src/components/icons/chat_thread';
 import CollapseIcon from 'src/components/icons/collapse';
 import CompassIcon from 'src/components/icons/compassIcon';
-import HandEmoji from 'src/components/icons/hand';
 import LeaveCallIcon from 'src/components/icons/leave_call_icon';
 import MutedIcon from 'src/components/icons/muted_icon';
 import ParticipantsIcon from 'src/components/icons/participants';
@@ -41,12 +40,10 @@ import ScreenIcon from 'src/components/icons/screen_icon';
 import ShareScreenIcon from 'src/components/icons/share_screen';
 import UnmutedIcon from 'src/components/icons/unmuted_icon';
 import UnshareScreenIcon from 'src/components/icons/unshare_screen';
-import {ExpandedCallContainer} from 'src/components/incoming_calls/expanded_call_container';
-import {ReactionStream} from 'src/components/reaction_stream/reaction_stream';
-import {
-    CallAlertConfigs,
-} from 'src/constants';
-import {logDebug, logErr} from 'src/log';
+import { ExpandedIncomingCallContainer } from 'src/components/incoming_calls/expanded_incoming_call_container';
+import { ReactionStream } from 'src/components/reaction_stream/reaction_stream';
+import { CallAlertConfigs } from 'src/constants';
+import { logDebug, logErr } from 'src/log';
 import {
     keyToAction,
     LEAVE_CALL,
@@ -64,7 +61,8 @@ import {
     AudioDevices,
     CallAlertStates,
     CallAlertStatesDefault,
-    CallRecordingReduxState,
+    CallJobReduxState,
+    RemoveConfirmationData,
 } from 'src/types/types';
 import {
     getCallsClient,
@@ -77,58 +75,71 @@ import {
     shouldRenderDesktopWidget,
     untranslatable,
 } from 'src/utils';
-import styled, {createGlobalStyle, css} from 'styled-components';
+import styled, { createGlobalStyle, css } from 'styled-components';
 
 import CallParticipant from './call_participant';
-import ControlsButton from './controls_button';
+import ControlsButton, {
+    CallThreadIcon,
+    MentionsCounter,
+    UnreadDot,
+} from './controls_button';
 import GlobalBanner from './global_banner';
-import {ReactionButton, ReactionButtonRef} from './reaction_button';
+import { ReactionButton, ReactionButtonRef } from './reaction_button';
 import RecordingInfoPrompt from './recording_info_prompt';
+import { RemoveConfirmation } from './remove_confirmation';
 
 interface Props extends RouteComponentProps {
-    intl: IntlShape,
-    theme: Theme,
-    show: boolean,
-    currentUserID: string,
-    currentTeamID: string,
-    profiles: {
-        [userID: string]: UserProfile,
-    }
-    sessions: UserSessionState[],
-    currentSession?: UserSessionState,
-    callStartAt: number,
-    callHostID: string,
-    callHostChangeAt: number,
-    callRecording?: CallRecordingReduxState,
-    isRecording: boolean,
-    hideExpandedView: () => void,
-    showScreenSourceModal: () => void,
-    selectRhsPost?: (postID: string) => void,
-    prefetchThread: (postId: string) => void,
-    closeRhs?: () => void,
-    isRhsOpen?: boolean,
-    screenSharingSession?: UserSessionState,
-    channel?: Channel,
-    channelTeam?: Team,
+    intl: IntlShape;
+    theme: Theme;
+    show: boolean;
+    currentUserID: string;
+    currentTeamID: string;
+    profiles: IDMappedObjects<UserProfile>;
+    sessions: UserSessionState[];
+    sessionsMap: { [sessionID: string]: UserSessionState };
+    currentSession?: UserSessionState;
+    callStartAt: number;
+    callHostID: string;
+    callHostChangeAt: number;
+    callRecording?: CallJobReduxState;
+    isRecording: boolean;
+    hideExpandedView: () => void;
+    showScreenSourceModal: () => void;
+    selectRhsPost?: (postID: string) => void;
+    prefetchThread: (postId: string) => void;
+    closeRhs?: () => void;
+    isRhsOpen?: boolean;
+    screenSharingSession?: UserSessionState;
+    channel?: Channel;
+    channelTeam?: Team;
     channelDisplayName: string;
-    connectedDMUser: UserProfile | undefined,
-    threadID: Post['id'],
-    threadUnreadReplies: number | undefined,
-    threadUnreadMentions: number | undefined,
-    rhsSelectedThreadID?: string,
-    trackEvent: (event: Telemetry.Event, source: Telemetry.Source, props?: Record<string, string>) => void,
-    allowScreenSharing: boolean,
-    recordingsEnabled: boolean,
-    recordingMaxDuration: number,
-    startCallRecording: (callID: string) => void,
-    recordingPromptDismissedAt: (callID: string, dismissedAt: number) => void,
-    transcriptionsEnabled: boolean,
+    connectedDMUser: UserProfile | undefined;
+    threadID: Post['id'];
+    threadUnreadReplies: number | undefined;
+    threadUnreadMentions: number | undefined;
+    rhsSelectedThreadID?: string;
+    trackEvent: (
+        event: Telemetry.Event,
+        source: Telemetry.Source,
+        props?: Record<string, string>,
+    ) => void;
+    allowScreenSharing: boolean;
+    recordingsEnabled: boolean;
+    recordingMaxDuration: number;
+    startCallRecording: (callID: string) => void;
+    recordingPromptDismissedAt: (callID: string, dismissedAt: number) => void;
+    transcriptionsEnabled: boolean;
+    liveCaptionsAvailable: boolean;
+    isAdmin: boolean;
+    hostControlsAllowed: boolean;
 }
 
 interface State {
-    screenStream: MediaStream | null,
-    showParticipantsList: boolean,
-    alerts: CallAlertStates,
+    screenStream: MediaStream | null;
+    showParticipantsList: boolean;
+    showLiveCaptions: boolean;
+    alerts: CallAlertStates;
+    removeConfirmation: RemoveConfirmationData | null;
 }
 
 const StyledMediaController = styled(MediaController)`
@@ -138,10 +149,12 @@ const StyledMediaController = styled(MediaController)`
 `;
 
 const StyledMediaControlBar = styled(MediaControlBar)`
+    position: relative;
     display: flex;
     flex-direction: row;
     justify-content: flex-end;
     background-color: rgba(0, 0, 0, 0.5);
+    z-index: 1;
 `;
 
 const StyledMediaFullscreenButton = styled(MediaFullscreenButton)`
@@ -156,6 +169,8 @@ export default class ExpandedView extends React.PureComponent<Props, State> {
     private expandedRootRef = React.createRef<HTMLDivElement>();
     private pushToTalk = false;
     private screenPlayer: HTMLVideoElement | null = null;
+
+    static contextType = window.ProductApi.WebSocketProvider;
 
     #unlockNavigation?: () => void;
 
@@ -174,20 +189,13 @@ export default class ExpandedView extends React.PureComponent<Props, State> {
                 overflow: 'auto',
             },
             main: {
+                position: 'relative',
                 display: 'flex',
                 flexDirection: 'column',
                 flex: '1',
             },
             headerSpreader: {
                 marginRight: 'auto',
-            },
-            closeViewButton: {
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                width: '40px',
-                height: '40px',
-                borderRadius: '4px',
             },
             participants: {
                 display: 'grid',
@@ -199,23 +207,26 @@ export default class ExpandedView extends React.PureComponent<Props, State> {
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                padding: '16px 8px',
+                padding: '12px',
                 width: '100%',
             },
             centerControls: {
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
+                gap: '8px',
             },
             topContainer: {
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                fontSize: '16px',
-                lineHeight: '24px',
+                fontSize: '14px',
+                lineHeight: '20px',
                 fontWeight: 600,
+                padding: '8px',
+                margin: '0 12px',
+                gap: '4px',
                 height: '56px',
-                padding: '0 20px',
             },
             screenContainer: {
                 display: 'flex',
@@ -262,13 +273,14 @@ export default class ExpandedView extends React.PureComponent<Props, State> {
                 display: 'flex',
                 alignItems: 'center',
                 background: 'rgba(var(--center-channel-color-rgb), 0.04)',
-                borderBottom: '1px solid rgba(var(--center-channel-color-rgb), 0.08)',
+                borderBottom:
+                    '1px solid rgba(var(--center-channel-color-rgb), 0.08)',
                 fontFamily: 'Metropolis, sans-serif',
                 fontWeight: 600,
                 fontSize: '16px',
                 padding: '0 16px',
-                height: '63px',
-                lineHeight: '63px',
+                height: '56px',
+                lineHeight: '56px',
             },
             centerView: {
                 display: 'flex',
@@ -289,7 +301,9 @@ export default class ExpandedView extends React.PureComponent<Props, State> {
         this.state = {
             screenStream: null,
             showParticipantsList: false,
+            showLiveCaptions: false,
             alerts: CallAlertStatesDefault,
+            removeConfirmation: null,
         };
 
         if (window.opener) {
@@ -303,14 +317,15 @@ export default class ExpandedView extends React.PureComponent<Props, State> {
                     window.desktopAPI.openLinkFromCalls(tx.pathname);
                 } else {
                     // DEPRECATED: legacy Desktop API logic (<= 5.6.0)
-                    sendDesktopEvent('calls-link-click', {link: tx.pathname});
+                    sendDesktopEvent('calls-link-click', { link: tx.pathname });
                 }
                 return false;
             });
 
             // Set the inter-window actions
             window.callActions = {
-                setRecordingPromptDismissedAt: this.props.recordingPromptDismissedAt,
+                setRecordingPromptDismissedAt:
+                    this.props.recordingPromptDismissedAt,
             };
 
             // Set the current state
@@ -344,7 +359,10 @@ export default class ExpandedView extends React.PureComponent<Props, State> {
     };
 
     handleKeyUp = (ev: KeyboardEvent) => {
-        if (isActiveElementInteractable() && !this.expandedRootRef.current?.contains(document.activeElement)) {
+        if (
+            isActiveElementInteractable() &&
+            !this.expandedRootRef.current?.contains(document.activeElement)
+        ) {
             return;
         }
 
@@ -367,40 +385,43 @@ export default class ExpandedView extends React.PureComponent<Props, State> {
             return;
         }
 
-        if (isActiveElementInteractable() && !this.expandedRootRef.current?.contains(document.activeElement)) {
+        if (
+            isActiveElementInteractable() &&
+            !this.expandedRootRef.current?.contains(document.activeElement)
+        ) {
             return;
         }
 
         switch (keyToAction('popout', ev)) {
-        case PUSH_TO_TALK:
-            if (this.pushToTalk) {
-                return;
-            }
-            getCallsClient()?.unmute();
-            this.pushToTalk = true;
-            this.forceUpdate();
-            break;
-        case MUTE_UNMUTE:
-            this.onMuteToggle();
-            break;
-        case RAISE_LOWER_HAND:
-            this.onRaiseHandToggle(true);
-            break;
-        case MAKE_REACTION:
-            this.emojiButtonRef.current?.toggle();
-            break;
-        case SHARE_UNSHARE_SCREEN:
-            this.onShareScreenToggle(true);
-            break;
-        case PARTICIPANTS_LIST_TOGGLE:
-            this.onParticipantsListToggle(true);
-            break;
-        case LEAVE_CALL:
-            this.onDisconnectClick();
-            break;
-        case RECORDING_TOGGLE:
-            this.onRecordToggle(true);
-            break;
+            case PUSH_TO_TALK:
+                if (this.pushToTalk) {
+                    return;
+                }
+                getCallsClient()?.unmute();
+                this.pushToTalk = true;
+                this.forceUpdate();
+                break;
+            case MUTE_UNMUTE:
+                this.onMuteToggle();
+                break;
+            case RAISE_LOWER_HAND:
+                this.onRaiseHandToggle(true);
+                break;
+            case MAKE_REACTION:
+                this.emojiButtonRef.current?.toggle();
+                break;
+            case SHARE_UNSHARE_SCREEN:
+                this.onShareScreenToggle(true);
+                break;
+            case PARTICIPANTS_LIST_TOGGLE:
+                this.onParticipantsListToggle(true);
+                break;
+            case LEAVE_CALL:
+                this.onDisconnectClick();
+                break;
+            case RECORDING_TOGGLE:
+                this.onRecordToggle(true);
+                break;
         }
     };
 
@@ -441,11 +462,15 @@ export default class ExpandedView extends React.PureComponent<Props, State> {
     };
 
     isMuted() {
-        return this.props.currentSession ? !this.props.currentSession.unmuted : true;
+        return this.props.currentSession
+            ? !this.props.currentSession.unmuted
+            : true;
     }
 
     isHandRaised() {
-        return this.props.currentSession ? this.props.currentSession.raised_hand > 0 : false;
+        return this.props.currentSession
+            ? this.props.currentSession.raised_hand > 0
+            : false;
     }
 
     onRecordToggle = async (fromShortcut?: boolean) => {
@@ -456,10 +481,18 @@ export default class ExpandedView extends React.PureComponent<Props, State> {
 
         if (this.props.isRecording) {
             await stopCallRecording(this.props.channel.id);
-            this.props.trackEvent(Telemetry.Event.StopRecording, Telemetry.Source.ExpandedView, {initiator: fromShortcut ? 'shortcut' : 'button'});
+            this.props.trackEvent(
+                Telemetry.Event.StopRecording,
+                Telemetry.Source.ExpandedView,
+                { initiator: fromShortcut ? 'shortcut' : 'button' },
+            );
         } else {
             await this.props.startCallRecording(this.props.channel.id);
-            this.props.trackEvent(Telemetry.Event.StartRecording, Telemetry.Source.ExpandedView, {initiator: fromShortcut ? 'shortcut' : 'button'});
+            this.props.trackEvent(
+                Telemetry.Event.StartRecording,
+                Telemetry.Source.ExpandedView,
+                { initiator: fromShortcut ? 'shortcut' : 'button' },
+            );
         }
     };
 
@@ -468,14 +501,25 @@ export default class ExpandedView extends React.PureComponent<Props, State> {
             return;
         }
         const callsClient = getCallsClient();
-        if (this.props.screenSharingSession && this.props.screenSharingSession?.session_id === this.props.currentSession?.session_id) {
+        if (
+            this.props.screenSharingSession &&
+            this.props.screenSharingSession?.session_id ===
+                this.props.currentSession?.session_id
+        ) {
             callsClient?.unshareScreen();
             this.setState({
                 screenStream: null,
             });
-            this.props.trackEvent(Telemetry.Event.UnshareScreen, Telemetry.Source.ExpandedView, {initiator: fromShortcut ? 'shortcut' : 'button'});
+            this.props.trackEvent(
+                Telemetry.Event.UnshareScreen,
+                Telemetry.Source.ExpandedView,
+                { initiator: fromShortcut ? 'shortcut' : 'button' },
+            );
         } else if (!this.props.screenSharingSession) {
-            if (window.desktop && compareSemVer(window.desktop.version, '5.1.0') >= 0) {
+            if (
+                window.desktop &&
+                compareSemVer(window.desktop.version, '5.1.0') >= 0
+            ) {
                 this.props.showScreenSourceModal();
             } else if (window.desktopAPI?.openScreenShareModal) {
                 logDebug('desktopAPI.openScreenShareModal');
@@ -514,31 +558,63 @@ export default class ExpandedView extends React.PureComponent<Props, State> {
 
                 this.setState(state);
             }
-            this.props.trackEvent(Telemetry.Event.ShareScreen, Telemetry.Source.ExpandedView, {initiator: fromShortcut ? 'shortcut' : 'button'});
+            this.props.trackEvent(
+                Telemetry.Event.ShareScreen,
+                Telemetry.Source.ExpandedView,
+                { initiator: fromShortcut ? 'shortcut' : 'button' },
+            );
         }
     };
 
     onRaiseHandToggle = (fromShortcut?: boolean) => {
         const callsClient = getCallsClient();
         if (this.isHandRaised()) {
-            this.props.trackEvent(Telemetry.Event.LowerHand, Telemetry.Source.ExpandedView, {initiator: fromShortcut ? 'shortcut' : 'button'});
+            this.props.trackEvent(
+                Telemetry.Event.LowerHand,
+                Telemetry.Source.ExpandedView,
+                { initiator: fromShortcut ? 'shortcut' : 'button' },
+            );
             callsClient?.unraiseHand();
         } else {
-            this.props.trackEvent(Telemetry.Event.RaiseHand, Telemetry.Source.ExpandedView, {initiator: fromShortcut ? 'shortcut' : 'button'});
+            this.props.trackEvent(
+                Telemetry.Event.RaiseHand,
+                Telemetry.Source.ExpandedView,
+                { initiator: fromShortcut ? 'shortcut' : 'button' },
+            );
             callsClient?.raiseHand();
         }
     };
 
     onParticipantsListToggle = (fromShortcut?: boolean) => {
-        const event = this.state.showParticipantsList ? Telemetry.Event.CloseParticipantsList : Telemetry.Event.OpenParticipantsList;
-        this.props.trackEvent(event, Telemetry.Source.ExpandedView, {initiator: fromShortcut ? 'shortcut' : 'button'});
+        const event = this.state.showParticipantsList
+            ? Telemetry.Event.CloseParticipantsList
+            : Telemetry.Event.OpenParticipantsList;
+        this.props.trackEvent(event, Telemetry.Source.ExpandedView, {
+            initiator: fromShortcut ? 'shortcut' : 'button',
+        });
         this.setState({
             showParticipantsList: !this.state.showParticipantsList,
         });
     };
 
+    onLiveCaptionsToggle = (fromShortcut?: boolean) => {
+        const event = this.state.showLiveCaptions
+            ? Telemetry.Event.LiveCaptionsOff
+            : Telemetry.Event.LiveCaptionsOn;
+        this.props.trackEvent(event, Telemetry.Source.ExpandedView, {
+            initiator: fromShortcut ? 'shortcut' : 'button',
+        });
+        this.setState({
+            showLiveCaptions: !this.state.showLiveCaptions,
+        });
+    };
+
     onCloseViewClick = () => {
-        this.props.trackEvent(Telemetry.Event.CloseExpandedView, Telemetry.Source.ExpandedView, {initiator: 'button'});
+        this.props.trackEvent(
+            Telemetry.Event.CloseExpandedView,
+            Telemetry.Source.ExpandedView,
+            { initiator: 'button' },
+        );
 
         if (window.opener) {
             window.close();
@@ -551,8 +627,13 @@ export default class ExpandedView extends React.PureComponent<Props, State> {
     public componentDidUpdate(prevProps: Props, prevState: State) {
         if (window.opener) {
             if (document.title.indexOf('Call') === -1 && this.props.channel) {
-                if (isDMChannel(this.props.channel) && this.props.connectedDMUser) {
-                    document.title = `Call - ${getUserDisplayName(this.props.connectedDMUser)}`;
+                if (
+                    isDMChannel(this.props.channel) &&
+                    this.props.connectedDMUser
+                ) {
+                    document.title = `Call - ${getUserDisplayName(
+                        this.props.connectedDMUser,
+                    )}`;
                 } else if (!isDMChannel(this.props.channel)) {
                     document.title = `Call - ${this.props.channel.display_name}`;
                 }
@@ -568,15 +649,47 @@ export default class ExpandedView extends React.PureComponent<Props, State> {
             }
         }
 
-        if (this.screenPlayer && this.state.screenStream !== prevState.screenStream) {
+        if (
+            this.screenPlayer &&
+            this.state.screenStream !== prevState.screenStream
+        ) {
             this.screenPlayer.srcObject = this.state.screenStream;
         }
     }
 
+    requestCallState = () => {
+        const callsClient = getCallsClient();
+        if (!callsClient) {
+            logErr('callsClient should be defined');
+            return;
+        }
+
+        // On WebSocket connect we request the call state. This avoids
+        // making a potentially racy HTTP call and should guarantee
+        // a consistent state.
+        logDebug('requesting call state through ws');
+        this.context.sendMessage('custom_com.mattermost.calls_call_state', {
+            channelID: callsClient.channelID,
+        });
+    };
+
     public componentDidMount() {
         const callsClient = getCallsClient();
         if (!callsClient) {
+            logErr('callsClient should be defined');
             return;
+        }
+
+        if (!this.context) {
+            logErr('context should be defined');
+            return;
+        }
+
+        if (this.context?.conn?.readyState === WebSocket.OPEN) {
+            this.requestCallState();
+        } else {
+            logDebug('ws not connected still, adding listener');
+            this.context.addFirstConnectListener(this.requestCallState);
         }
 
         // keyboard shortcuts
@@ -609,7 +722,9 @@ export default class ExpandedView extends React.PureComponent<Props, State> {
 
         this.setDevices(callsClient.getAudioDevices());
 
-        const screenStream = callsClient.getLocalScreenStream() || callsClient.getRemoteScreenStream();
+        const screenStream =
+            callsClient.getLocalScreenStream() ||
+            callsClient.getRemoteScreenStream();
 
         // eslint-disable-next-line react/no-did-mount-set-state
         this.setState({
@@ -617,8 +732,12 @@ export default class ExpandedView extends React.PureComponent<Props, State> {
                 ...this.state.alerts,
                 missingAudioInputPermissions: {
                     ...this.state.alerts.missingAudioInputPermissions,
-                    active: !this.state.alerts.missingAudioInput.active && !callsClient.audioTrack,
-                    show: !this.state.alerts.missingAudioInput.active && !callsClient.audioTrack,
+                    active:
+                        !this.state.alerts.missingAudioInput.active &&
+                        !callsClient.audioTrack,
+                    show:
+                        !this.state.alerts.missingAudioInput.active &&
+                        !callsClient.audioTrack,
                 },
             },
             screenStream,
@@ -639,7 +758,10 @@ export default class ExpandedView extends React.PureComponent<Props, State> {
         }
 
         callsClient.on('mos', (mos: number) => {
-            if (!this.state.alerts.degradedCallQuality.show && mos < mosThreshold) {
+            if (
+                !this.state.alerts.degradedCallQuality.show &&
+                mos < mosThreshold
+            ) {
                 this.setState({
                     alerts: {
                         ...this.state.alerts,
@@ -650,7 +772,10 @@ export default class ExpandedView extends React.PureComponent<Props, State> {
                     },
                 });
             }
-            if (this.state.alerts.degradedCallQuality.show && mos >= mosThreshold) {
+            if (
+                this.state.alerts.degradedCallQuality.show &&
+                mos >= mosThreshold
+            ) {
                 this.setState({
                     alerts: {
                         ...this.state.alerts,
@@ -665,12 +790,20 @@ export default class ExpandedView extends React.PureComponent<Props, State> {
     }
 
     toggleChat = async () => {
-        if (this.props.isRhsOpen && this.props.rhsSelectedThreadID === this.props.threadID) {
+        if (
+            this.props.isRhsOpen &&
+            this.props.rhsSelectedThreadID === this.props.threadID
+        ) {
             // close rhs
             this.props.closeRhs?.();
-        } else if (this.props.channelTeam && this.props.channelTeam.id !== this.props.currentTeamID) {
+        } else if (
+            this.props.channelTeam &&
+            this.props.channelTeam.id !== this.props.currentTeamID
+        ) {
             // go to call thread in channels
-            this.props.history.push(`/${this.props.channelTeam.name}/pl/${this.props.threadID}`);
+            this.props.history.push(
+                `/${this.props.channelTeam.name}/pl/${this.props.threadID}`,
+            );
         } else if (this.props.threadID) {
             // open thread
             this.props.selectRhsPost?.(this.props.threadID);
@@ -682,6 +815,7 @@ export default class ExpandedView extends React.PureComponent<Props, State> {
         window.removeEventListener('keyup', this.handleKeyUp, true);
         window.removeEventListener('blur', this.handleBlur, true);
         this.#unlockNavigation?.();
+        this.context?.removeFirstConnectListener(this.requestCallState);
     }
 
     dismissRecordingPrompt = () => {
@@ -691,18 +825,52 @@ export default class ExpandedView extends React.PureComponent<Props, State> {
         }
 
         // Dismiss our prompt.
-        this.props.recordingPromptDismissedAt(this.props.channel.id, Date.now());
+        this.props.recordingPromptDismissedAt(
+            this.props.channel.id,
+            Date.now(),
+        );
 
         // Dismiss the parent window's prompt.
-        window.opener?.callActions?.setRecordingPromptDismissedAt(this.props.channel.id, Date.now());
+        window.opener?.callActions?.setRecordingPromptDismissedAt(
+            this.props.channel.id,
+            Date.now(),
+        );
+    };
+
+    onRemove = (sessionID: string, userID: string) => {
+        this.setState({
+            removeConfirmation: {
+                sessionID,
+                userID,
+            },
+        });
+    };
+
+    onRemoveConfirm = () => {
+        hostRemove(
+            this.props.channel?.id,
+            this.state.removeConfirmation?.sessionID,
+        );
+        this.setState({
+            removeConfirmation: null,
+        });
+    };
+
+    onRemoveCancel = () => {
+        this.setState({
+            removeConfirmation: null,
+        });
     };
 
     shouldRenderAlertBanner = () => {
-        return Object.entries(this.state.alerts).filter((kv) => kv[1].show).length > 0;
+        return (
+            Object.entries(this.state.alerts).filter((kv) => kv[1].show)
+                .length > 0
+        );
     };
 
     renderAlertBanner = () => {
-        const {formatMessage} = this.props.intl;
+        const { formatMessage } = this.props.intl;
         for (const keyVal of Object.entries(this.state.alerts)) {
             const [alertID, alertState] = keyVal;
             if (!alertState.show) {
@@ -740,14 +908,20 @@ export default class ExpandedView extends React.PureComponent<Props, State> {
     };
 
     renderScreenSharingPlayer = () => {
-        const isSharing = this.props.screenSharingSession?.session_id === this.props.currentSession?.session_id;
-        const {formatMessage} = this.props.intl;
+        const isSharing =
+            this.props.screenSharingSession?.session_id ===
+            this.props.currentSession?.session_id;
+        const { formatMessage } = this.props.intl;
 
         let profile;
         if (!isSharing) {
             for (let i = 0; i < this.props.sessions.length; i++) {
-                if (this.props.sessions[i].session_id === this.props.screenSharingSession?.session_id) {
-                    profile = this.props.profiles[this.props.sessions[i].user_id];
+                if (
+                    this.props.sessions[i].session_id ===
+                    this.props.screenSharingSession?.session_id
+                ) {
+                    profile =
+                        this.props.profiles[this.props.sessions[i].user_id];
                     break;
                 }
             }
@@ -756,7 +930,12 @@ export default class ExpandedView extends React.PureComponent<Props, State> {
             }
         }
 
-        const msg = isSharing ? formatMessage({defaultMessage: 'You\'re sharing your screen'}) : formatMessage({defaultMessage: 'You\'re viewing {presenterName}\'s screen'}, {presenterName: getUserDisplayName(profile)});
+        const msg = isSharing
+            ? formatMessage({ defaultMessage: "You're sharing your screen" })
+            : formatMessage(
+                  { defaultMessage: "You're viewing {presenterName}'s screen" },
+                  { presenterName: getUserDisplayName(profile) },
+              );
 
         return (
             <div
@@ -764,12 +943,12 @@ export default class ExpandedView extends React.PureComponent<Props, State> {
                     ...this.style.screenContainer,
 
                     // Account for when we display an alert banner.
-                    maxHeight: `calc(100vh - ${this.shouldRenderAlertBanner() ? 180 : 140}px)`,
+                    maxHeight: `calc(100vh - ${
+                        this.shouldRenderAlertBanner() ? 164 : 124
+                    }px)`,
                 }}
             >
-                <StyledMediaController
-                    gesturesDisabled={true}
-                >
+                <StyledMediaController gesturesDisabled={true}>
                     <video
                         id='screen-player'
                         slot='media'
@@ -781,21 +960,15 @@ export default class ExpandedView extends React.PureComponent<Props, State> {
                     />
                     <StyledMediaControlBar>
                         <StyledMediaFullscreenButton>
-                            <CompassIcon
-                                slot='enter'
-                                icon='arrow-expand-all'
-                            />
-                            <CompassIcon
-                                slot='exit'
-                                icon='arrow-collapse'
-                            />
+                            <CompassIcon slot='enter' icon='arrow-expand-all' />
+                            <CompassIcon slot='exit' icon='arrow-collapse' />
                         </StyledMediaFullscreenButton>
                     </StyledMediaControlBar>
                 </StyledMediaController>
                 <span style={this.style.screenSharingMsg}>
                     <ScreenIcon
                         fill={'rgba(255, 255, 255, 0.56)'}
-                        style={{width: '12px', height: '12px'}}
+                        style={{ width: '12px', height: '12px' }}
                     />
                     {msg}
                 </span>
@@ -804,7 +977,7 @@ export default class ExpandedView extends React.PureComponent<Props, State> {
     };
 
     renderParticipants = () => {
-        const {formatMessage} = this.props.intl;
+        const { formatMessage } = this.props.intl;
         return this.props.sessions.map((session) => {
             const isMuted = !session.unmuted;
             const isSpeaking = Boolean(session.voice);
@@ -818,130 +991,76 @@ export default class ExpandedView extends React.PureComponent<Props, State> {
             return (
                 <CallParticipant
                     key={session.session_id}
-                    name={`${getUserDisplayName(profile)} ${session.session_id === this.props.currentSession?.session_id ? formatMessage({defaultMessage: '(you)'}) : ''}`}
-                    pictureURL={Client4.getProfilePictureUrl(profile.id, profile.last_picture_update)}
+                    name={`${getUserDisplayName(profile)} ${
+                        session.session_id ===
+                        this.props.currentSession?.session_id
+                            ? formatMessage({ defaultMessage: '(you)' })
+                            : ''
+                    }`}
+                    pictureURL={Client4.getProfilePictureUrl(
+                        profile.id,
+                        profile.last_picture_update,
+                    )}
                     isMuted={isMuted}
                     isSpeaking={isSpeaking}
                     isHandRaised={isHandRaised}
                     reaction={session?.reaction}
+                    isYou={
+                        session.session_id ===
+                        this.props.currentSession?.session_id
+                    }
                     isHost={profile.id === this.props.callHostID}
+                    iAmHost={
+                        this.props.currentSession?.user_id ===
+                        this.props.callHostID
+                    }
+                    callID={this.props.channel?.id}
+                    userID={session.user_id}
+                    sessionID={session.session_id}
+                    isSharingScreen={
+                        this.props.screenSharingSession?.session_id ===
+                        session.session_id
+                    }
+                    onRemove={() =>
+                        this.onRemove(session.session_id, session.user_id)
+                    }
                 />
             );
         });
     };
 
     renderParticipantsRHSList = () => {
-        const {formatMessage} = this.props.intl;
-        return this.props.sessions.map((session) => {
-            const isMuted = !session.unmuted;
-            const isSpeaking = Boolean(session.voice);
-            const isHandRaised = Boolean(session.raised_hand > 0);
-            const profile = this.props.profiles[session.user_id];
-            const isYou = session.session_id === this.props.currentSession?.session_id;
-            const isHost = this.props.callHostID === session.user_id;
-            let youStyle: CSSProperties = {color: 'rgba(var(--center-channel-color-rgb), 0.56)'};
-            if (isYou && isHost) {
-                youStyle = {...youStyle, marginLeft: '2px'};
-            }
-
-            if (!profile) {
-                return null;
-            }
-
-            const MuteIcon = isMuted ? MutedIcon : UnmutedIcon;
-
-            return (
-                <li
-                    key={'participants_rhs_profile_' + session.session_id}
-                    style={{display: 'flex', alignItems: 'center', padding: '8px 16px', gap: '8px'}}
-                >
-                    <Avatar
-                        size={24}
-                        fontSize={10}
-                        border={false}
-                        borderGlowWidth={isSpeaking ? 2 : 0}
-                        url={Client4.getProfilePictureUrl(profile.id, profile.last_picture_update)}
-                    />
-
-                    <span
-                        style={{
-                            display: 'block',
-                            whiteSpace: 'pre',
-                            overflow: 'hidden',
-                            textOverflow: 'ellipsis',
-                            fontWeight: 600,
-                            fontSize: '14px',
-                            lineHeight: '20px',
-                        }}
-                    >
-                        {getUserDisplayName(profile)}
-                    </span>
-
-                    {(isYou || isHost) &&
-                        <span style={{marginLeft: -4, display: 'flex', alignItems: 'baseline', gap: 5}}>
-                            {isYou &&
-                                <span style={youStyle}>
-                                    {formatMessage({defaultMessage: '(you)'})}
-                                </span>
-                            }
-                            {isHost && <HostBadge onWhiteBg={true}/>}
-                        </span>
-                    }
-
-                    <div
-                        style={{
-                            display: 'flex',
-                            justifyContent: 'center',
-                            alignItems: 'center',
-                            marginLeft: 'auto',
-                            gap: '12px',
-                        }}
-                    >
-                        {session?.reaction &&
-                            <div
-                                style={{
-                                    marginBottom: 4,
-                                    marginRight: 2,
-                                }}
-                            >
-                                <Emoji
-                                    emoji={session.reaction.emoji}
-                                    size={16}
-                                />
-                            </div>
-                        }
-                        {isHandRaised &&
-                            <HandEmoji
-                                style={{
-                                    fill: 'var(--away-indicator)',
-                                    width: '16px',
-                                    height: '16px',
-                                }}
-                            />
-                        }
-
-                        {this.props.screenSharingSession?.session_id === session.session_id &&
-                            <ScreenIcon
-                                fill={'rgb(var(--dnd-indicator-rgb))'}
-                                style={{width: '16px', height: '16px'}}
-                            />
-                        }
-
-                        <MuteIcon
-                            fill={isMuted ? '#C4C4C4' : '#3DB887'}
-                            style={{width: '16px', height: '16px'}}
-                        />
-
-                    </div>
-                </li>
-            );
-        });
+        return this.props.sessions.map((session) => (
+            <CallParticipantRHS
+                key={'participants_rhs_profile_' + session.session_id}
+                session={session}
+                profile={this.props.profiles[session.user_id]}
+                isYou={
+                    this.props.currentSession?.session_id === session.session_id
+                }
+                isHost={this.props.callHostID === session.user_id}
+                isSharingScreen={
+                    this.props.screenSharingSession?.session_id ===
+                    session.session_id
+                }
+                iAmHost={
+                    this.props.currentSession?.user_id === this.props.callHostID
+                }
+                callID={this.props.channel?.id}
+                onRemove={() =>
+                    this.onRemove(session.session_id, session.user_id)
+                }
+            />
+        ));
     };
 
     renderRecordingBadge = () => {
         // This should not render if:
         // - The recording has not been initialized yet OR if it has ended.
-        if (!this.props.callRecording?.init_at || this.props.callRecording?.end_at) {
+        if (
+            !this.props.callRecording?.init_at ||
+            this.props.callRecording?.end_at
+        ) {
             return null;
         }
 
@@ -958,19 +1077,55 @@ export default class ExpandedView extends React.PureComponent<Props, State> {
             return null;
         }
 
-        return (
+        const badge = (
             <Badge
                 id={'calls-recording-badge'}
                 text={'REC'}
                 textSize={12}
-                gap={6}
-                margin={'0 12px 0 0'}
-                padding={'8px 6px'}
-                icon={(<RecordCircleIcon style={{width: '12px', height: '12px'}}/>)}
-                bgColor={hasRecStarted ? '#D24B4E' : 'rgba(221, 223, 228, 0.04)'}
+                lineHeight={16}
+                gap={4}
+                margin={'0 8px 0 0'}
+                padding={'6px 8px'}
+                icon={
+                    <RecordCircleIcon
+                        style={{ width: '12px', height: '12px' }}
+                    />
+                }
+                hoverIcon={
+                    <RecordSquareIcon
+                        style={{ width: '12px', height: '12px' }}
+                    />
+                }
+                bgColor={
+                    hasRecStarted ? '#D24B4E' : 'rgba(221, 223, 228, 0.04)'
+                }
                 loading={!hasRecStarted}
             />
         );
+
+        if (hasRecStarted) {
+            const { formatMessage } = this.props.intl;
+            return (
+                <OverlayTrigger
+                    placement='bottom'
+                    key={'badge-stop-recording'}
+                    overlay={
+                        <Tooltip id='tooltip-badge-stop-recording'>
+                            {formatMessage({ defaultMessage: 'Click to stop' })}
+                        </Tooltip>
+                    }
+                >
+                    <button
+                        className='style--none'
+                        onClick={() => this.onRecordToggle()}
+                    >
+                        {badge}
+                    </button>
+                </OverlayTrigger>
+            );
+        }
+
+        return badge;
     };
 
     render() {
@@ -983,60 +1138,109 @@ export default class ExpandedView extends React.PureComponent<Props, State> {
             return null;
         }
 
-        const {formatMessage} = this.props.intl;
+        const { formatMessage } = this.props.intl;
 
         const noInputDevices = this.state.alerts.missingAudioInput.active;
-        const noAudioPermissions = this.state.alerts.missingAudioInputPermissions.active;
-        const noScreenPermissions = this.state.alerts.missingScreenPermissions.active;
+        const noAudioPermissions =
+            this.state.alerts.missingAudioInputPermissions.active;
+        const noScreenPermissions =
+            this.state.alerts.missingScreenPermissions.active;
         const isMuted = this.isMuted();
-        const MuteIcon = isMuted && !noInputDevices && !noAudioPermissions ? MutedIcon : UnmutedIcon;
+        const MuteIcon =
+            isMuted && !noInputDevices && !noAudioPermissions
+                ? MutedIcon
+                : UnmutedIcon;
 
-        let muteTooltipText = isMuted ? formatMessage({defaultMessage: 'Unmute'}) : formatMessage({defaultMessage: 'Mute'});
+        let muteTooltipText = isMuted
+            ? formatMessage({ defaultMessage: 'Unmute' })
+            : formatMessage({ defaultMessage: 'Mute' });
         let muteTooltipSubtext = '';
 
         if (noInputDevices) {
-            muteTooltipText = formatMessage(CallAlertConfigs.missingAudioInput.tooltipText!);
-            muteTooltipSubtext = formatMessage(CallAlertConfigs.missingAudioInput.tooltipSubtext!);
+            muteTooltipText = formatMessage(
+                CallAlertConfigs.missingAudioInput.tooltipText!,
+            );
+            muteTooltipSubtext = formatMessage(
+                CallAlertConfigs.missingAudioInput.tooltipSubtext!,
+            );
         }
         if (noAudioPermissions) {
-            muteTooltipText = formatMessage(CallAlertConfigs.missingAudioInputPermissions.tooltipText!);
-            muteTooltipSubtext = formatMessage(CallAlertConfigs.missingAudioInputPermissions.tooltipSubtext!);
+            muteTooltipText = formatMessage(
+                CallAlertConfigs.missingAudioInputPermissions.tooltipText!,
+            );
+            muteTooltipSubtext = formatMessage(
+                CallAlertConfigs.missingAudioInputPermissions.tooltipSubtext!,
+            );
         }
 
         const sharingID = this.props.screenSharingSession?.session_id;
         const isSharing = sharingID === this.props.currentSession?.session_id;
 
-        let shareScreenTooltipText = isSharing ? formatMessage({defaultMessage: 'Stop presenting'}) : formatMessage({defaultMessage: 'Start presenting'});
+        let shareScreenTooltipText = isSharing
+            ? formatMessage({ defaultMessage: 'Stop presenting' })
+            : formatMessage({ defaultMessage: 'Start presenting' });
         if (noScreenPermissions) {
-            shareScreenTooltipText = formatMessage(CallAlertConfigs.missingScreenPermissions.tooltipText!);
+            shareScreenTooltipText = formatMessage(
+                CallAlertConfigs.missingScreenPermissions.tooltipText!,
+            );
         }
-        const shareScreenTooltipSubtext = noScreenPermissions ? formatMessage(CallAlertConfigs.missingScreenPermissions.tooltipSubtext!) : '';
+        const shareScreenTooltipSubtext = noScreenPermissions
+            ? formatMessage(
+                  CallAlertConfigs.missingScreenPermissions.tooltipSubtext!,
+              )
+            : '';
 
-        const participantsText = this.state.showParticipantsList ? formatMessage({defaultMessage: 'Hide participants list'}) : formatMessage({defaultMessage: 'Show participants list'});
+        const participantsText = this.state.showParticipantsList
+            ? formatMessage({ defaultMessage: 'Hide participants list' })
+            : formatMessage({ defaultMessage: 'Show participants list' });
 
-        const showChatThread = this.props.isRhsOpen && this.props.rhsSelectedThreadID === this.props.threadID;
-        let chatToolTipText = showChatThread ? formatMessage({defaultMessage: 'Hide chat'}) : formatMessage({defaultMessage: 'Show chat'});
+        const showChatThread =
+            this.props.isRhsOpen &&
+            this.props.rhsSelectedThreadID === this.props.threadID;
+        let chatToolTipText = showChatThread
+            ? formatMessage({ defaultMessage: 'Hide chat' })
+            : formatMessage({ defaultMessage: 'Show chat' });
 
         const chatToolTipSubtext = '';
-        const chatDisabled = this.props.channelTeam && this.props.channelTeam.id !== this.props.currentTeamID;
+        const chatDisabled =
+            this.props.channelTeam &&
+            this.props.channelTeam.id !== this.props.currentTeamID;
         if (chatDisabled) {
-            chatToolTipText = formatMessage({
-                defaultMessage: 'Chat unavailable: different team selected. Click here to switch back to {channelName} in {teamName}.',
-            }, {
-                channelName: this.props.channelDisplayName,
-                teamName: this.props.channelTeam!.display_name,
-            });
+            chatToolTipText = formatMessage(
+                {
+                    defaultMessage:
+                        'Chat unavailable: different team selected. Click here to switch back to {channelName} in {teamName}.',
+                },
+                {
+                    channelName: this.props.channelDisplayName,
+                    teamName: this.props.channelTeam!.display_name,
+                },
+            );
         }
+
+        const liveCaptionsText = this.state.showLiveCaptions
+            ? formatMessage({ defaultMessage: 'Turn off live captions' })
+            : formatMessage({ defaultMessage: 'Turn on live captions' });
 
         const globalRhsSupported = Boolean(this.props.selectRhsPost);
 
         const isChatUnread = Boolean(this.props.threadUnreadReplies);
 
         const isHost = this.props.callHostID === this.props.currentUserID;
+        const hostControlsAvailable =
+            this.props.hostControlsAllowed && (isHost || this.props.isAdmin);
+        const showMuteOthers =
+            hostControlsAvailable &&
+            this.props.sessions.some(
+                (s) => s.unmuted && s.user_id !== this.props.currentUserID,
+            );
 
         const isRecording = isHost && this.props.isRecording;
+        const showCCButton = this.props.liveCaptionsAvailable;
 
-        const recordTooltipText = isRecording ? formatMessage({defaultMessage: 'Stop recording'}) : formatMessage({defaultMessage: 'Record call'});
+        const recordTooltipText = isRecording
+            ? formatMessage({ defaultMessage: 'Stop recording' })
+            : formatMessage({ defaultMessage: 'Record call' });
         const RecordIcon = isRecording ? RecordSquareIcon : RecordCircleIcon;
         const ShareIcon = isSharing ? UnshareScreenIcon : ShareScreenIcon;
 
@@ -1044,91 +1248,136 @@ export default class ExpandedView extends React.PureComponent<Props, State> {
             <div
                 ref={this.expandedRootRef}
                 id='calls-expanded-view'
-                style={globalRhsSupported ? this.style.root : {
-                    ...this.style.root,
-                    position: 'absolute',
-                    top: 0,
-                    left: 0,
-                }}
+                style={
+                    globalRhsSupported
+                        ? this.style.root
+                        : {
+                              ...this.style.root,
+                              position: 'absolute',
+                              top: 0,
+                              left: 0,
+                          }
+                }
             >
                 <div style={this.style.main}>
                     {this.renderAlertBanner()}
 
-                    <div style={this.style.topContainer}>
+                    <div
+                        data-testid={'calls-expanded-view-top-container'}
+                        style={this.style.topContainer}
+                    >
                         {this.renderRecordingBadge()}
-                        <CallDuration
-                            style={{margin: '4px'}}
-                            startAt={this.props.callStartAt}
-                        />
-                        <span style={{margin: '4px'}}>{untranslatable('•')}</span>
-                        <span style={{margin: '4px', whiteSpace: 'nowrap'}}>
-                            {formatMessage({defaultMessage: '{count, plural, =1 {# participant} other {# participants}}'}, {count: this.props.sessions.length})}
+                        <CallDuration startAt={this.props.callStartAt} />
+                        <span>{untranslatable('•')}</span>
+                        <span style={{ whiteSpace: 'nowrap' }}>
+                            {formatMessage(
+                                {
+                                    defaultMessage:
+                                        '{count, plural, =1 {# participant} other {# participants}}',
+                                },
+                                { count: this.props.sessions.length },
+                            )}
                         </span>
 
-                        <div style={this.style.headerSpreader}/>
-                        <ExpandedCallContainer/>
+                        <div style={this.style.headerSpreader} />
+                        <ExpandedIncomingCallContainer />
                         <OverlayTrigger
                             placement='bottom'
                             key={'close-window'}
                             overlay={
                                 <Tooltip id='tooltip-close-window'>
-                                    {formatMessage({defaultMessage: 'Close window'})}
+                                    {formatMessage({
+                                        defaultMessage: 'Close window',
+                                    })}
                                 </Tooltip>
                             }
                         >
-                            <button
-                                className='button-close'
-                                style={this.style.closeViewButton}
+                            <CloseViewButton
+                                className='style--none'
                                 onClick={this.onCloseViewClick}
                             >
                                 <CollapseIcon
                                     style={{
-                                        width: '24px',
-                                        height: '24px',
-                                        fill: 'white',
+                                        width: '20px',
+                                        height: '20px',
                                     }}
                                 />
-                            </button>
+                            </CloseViewButton>
                         </OverlayTrigger>
                     </div>
 
-                    {!this.props.screenSharingSession &&
+                    {!this.props.screenSharingSession && (
                         <div style={this.style.centerView}>
                             <ul
                                 id='calls-expanded-view-participants-grid'
                                 style={{
                                     ...this.style.participants,
-                                    gridTemplateColumns: `repeat(${Math.min(this.props.sessions.length, MaxParticipantsPerRow)}, 1fr)`,
+                                    gridTemplateColumns: `repeat(${Math.min(
+                                        this.props.sessions.length,
+                                        MaxParticipantsPerRow,
+                                    )}, 1fr)`,
                                 }}
                             >
                                 {this.renderParticipants()}
                             </ul>
                         </div>
-                    }
-                    {this.props.screenSharingSession && this.renderScreenSharingPlayer()}
+                    )}
+                    {this.props.screenSharingSession &&
+                        this.renderScreenSharingPlayer()}
+
+                    {this.state.showLiveCaptions && (
+                        <LiveCaptionsOverlay>
+                            <LiveCaptionsStream />
+                        </LiveCaptionsOverlay>
+                    )}
                     <div
                         id='calls-expanded-view-controls'
                         style={this.style.controls}
                     >
-                        <div style={{flex: '1', display: 'flex', justifyContent: 'flex-start', marginLeft: '16px'}}>
+                        <div
+                            style={{
+                                flex: '1',
+                                display: 'flex',
+                                justifyContent: 'flex-start',
+                            }}
+                        >
                             <ControlsButton
                                 id='calls-popout-participants-button'
                                 onToggle={() => this.onParticipantsListToggle()}
                                 tooltipText={participantsText}
-                                shortcut={reverseKeyMappings.popout[PARTICIPANTS_LIST_TOGGLE][0]}
-                                bgColor={this.state.showParticipantsList ? 'white' : ''}
-                                bgColorHover={this.state.showParticipantsList ? 'rgba(255, 255, 255, 0.92)' : ''}
-                                iconFill={this.state.showParticipantsList ? 'rgba(var(--calls-bg-rgb), 0.80)' : ''}
-                                iconFillHover={this.state.showParticipantsList ? 'var(--calls-bg)' : ''}
+                                shortcut={
+                                    reverseKeyMappings.popout[
+                                        PARTICIPANTS_LIST_TOGGLE
+                                    ][0]
+                                }
+                                bgColor={
+                                    this.state.showParticipantsList
+                                        ? 'white'
+                                        : ''
+                                }
+                                bgColorHover={
+                                    this.state.showParticipantsList
+                                        ? 'rgba(255, 255, 255, 0.92)'
+                                        : ''
+                                }
+                                iconFill={
+                                    this.state.showParticipantsList
+                                        ? 'rgba(var(--calls-bg-rgb), 0.80)'
+                                        : ''
+                                }
+                                iconFillHover={
+                                    this.state.showParticipantsList
+                                        ? 'var(--calls-bg)'
+                                        : ''
+                                }
                                 icon={
                                     <ParticipantsIcon
                                         style={{
-                                            width: '28px',
-                                            height: '28px',
+                                            width: '20px',
+                                            height: '20px',
                                         }}
                                     />
                                 }
-                                margin='0'
                             />
                         </div>
 
@@ -1136,65 +1385,168 @@ export default class ExpandedView extends React.PureComponent<Props, State> {
                             <ControlsButton
                                 id='calls-popout-mute-button'
                                 // eslint-disable-next-line no-undefined
-                                onToggle={noInputDevices ? undefined : this.onMuteToggle}
+                                onToggle={
+                                    noInputDevices
+                                        ? undefined
+                                        : this.onMuteToggle
+                                }
                                 tooltipText={muteTooltipText}
                                 tooltipSubtext={muteTooltipSubtext}
                                 // eslint-disable-next-line no-undefined
-                                shortcut={noInputDevices || noAudioPermissions ? undefined : reverseKeyMappings.popout[MUTE_UNMUTE][0]}
-                                bgColor={isMuted ? '' : 'rgba(61, 184, 135, 0.16)'}
-                                bgColorHover={isMuted ? '' : 'rgba(61, 184, 135, 0.20)'}
-                                iconFill={isMuted ? '' : 'rgba(61, 184, 135, 0.80)'}
-                                iconFillHover={isMuted ? '' : 'rgba(61, 184, 135, 0.80)'}
+                                shortcut={
+                                    noInputDevices || noAudioPermissions
+                                        ? undefined
+                                        : reverseKeyMappings.popout[
+                                              MUTE_UNMUTE
+                                          ][0]
+                                }
+                                bgColor={
+                                    isMuted ? '' : 'rgba(61, 184, 135, 0.16)'
+                                }
+                                bgColorHover={
+                                    isMuted ? '' : 'rgba(61, 184, 135, 0.20)'
+                                }
+                                iconFill={
+                                    isMuted ? '' : 'rgba(61, 184, 135, 0.80)'
+                                }
+                                iconFillHover={
+                                    isMuted ? '' : 'rgba(61, 184, 135, 0.80)'
+                                }
                                 icon={
                                     <MuteIcon
                                         style={{
-                                            width: '28px',
-                                            height: '28px',
+                                            width: '20px',
+                                            height: '20px',
                                         }}
                                     />
                                 }
-                                unavailable={noInputDevices || noAudioPermissions}
+                                unavailable={
+                                    noInputDevices || noAudioPermissions
+                                }
                             />
 
-                            {this.props.allowScreenSharing &&
+                            {this.props.allowScreenSharing && (
                                 <ControlsButton
                                     id='calls-popout-screenshare-button'
                                     onToggle={() => this.onShareScreenToggle()}
                                     tooltipText={shareScreenTooltipText}
                                     tooltipSubtext={shareScreenTooltipSubtext}
                                     // eslint-disable-next-line no-undefined
-                                    shortcut={noScreenPermissions ? undefined : reverseKeyMappings.popout[SHARE_UNSHARE_SCREEN][0]}
-                                    bgColor={isSharing ? 'rgba(var(--dnd-indicator-rgb), 0.16)' : ''}
-                                    bgColorHover={isSharing ? 'rgba(var(--dnd-indicator-rgb), 0.20)' : ''}
-                                    iconFill={isSharing ? 'rgba(var(--dnd-indicator-rgb), 0.80)' : ''}
-                                    iconFillHover={isSharing ? 'var(--dnd-indicator)' : ''}
+                                    shortcut={
+                                        noScreenPermissions
+                                            ? undefined
+                                            : reverseKeyMappings.popout[
+                                                  SHARE_UNSHARE_SCREEN
+                                              ][0]
+                                    }
+                                    bgColor={
+                                        isSharing
+                                            ? 'rgba(var(--dnd-indicator-rgb), 0.16)'
+                                            : ''
+                                    }
+                                    bgColorHover={
+                                        isSharing
+                                            ? 'rgba(var(--dnd-indicator-rgb), 0.20)'
+                                            : ''
+                                    }
+                                    iconFill={
+                                        isSharing
+                                            ? 'rgba(var(--dnd-indicator-rgb), 0.80)'
+                                            : ''
+                                    }
+                                    iconFillHover={
+                                        isSharing ? 'var(--dnd-indicator)' : ''
+                                    }
                                     icon={
                                         <ShareIcon
                                             style={{
-                                                width: '28px',
-                                                height: '28px',
+                                                width: '20px',
+                                                height: '20px',
                                             }}
                                         />
                                     }
                                     unavailable={noScreenPermissions}
                                     disabled={Boolean(sharingID) && !isSharing}
                                 />
-                            }
+                            )}
 
-                            {isHost && this.props.recordingsEnabled &&
+                            {isHost && this.props.recordingsEnabled && (
                                 <ControlsButton
                                     id='calls-popout-record-button'
                                     onToggle={() => this.onRecordToggle()}
                                     tooltipText={recordTooltipText}
                                     // eslint-disable-next-line no-undefined
-                                    shortcut={reverseKeyMappings.popout[RECORDING_TOGGLE][0]}
-                                    bgColor={isRecording ? 'rgba(var(--dnd-indicator-rgb), 0.16)' : ''}
-                                    bgColorHover={isRecording ? 'rgba(var(--dnd-indicator-rgb), 0.20)' : ''}
-                                    iconFill={isRecording ? 'rgba(var(--dnd-indicator-rgb), 0.80)' : ''}
-                                    iconFillHover={isRecording ? 'var(--dnd-indicator)' : ''}
-                                    icon={<RecordIcon style={{width: '28px', height: '28px'}}/>}
+                                    shortcut={
+                                        reverseKeyMappings.popout[
+                                            RECORDING_TOGGLE
+                                        ][0]
+                                    }
+                                    bgColor={
+                                        isRecording
+                                            ? 'rgba(var(--dnd-indicator-rgb), 0.16)'
+                                            : ''
+                                    }
+                                    bgColorHover={
+                                        isRecording
+                                            ? 'rgba(var(--dnd-indicator-rgb), 0.20)'
+                                            : ''
+                                    }
+                                    iconFill={
+                                        isRecording
+                                            ? 'rgba(var(--dnd-indicator-rgb), 0.80)'
+                                            : ''
+                                    }
+                                    iconFillHover={
+                                        isRecording
+                                            ? 'var(--dnd-indicator)'
+                                            : ''
+                                    }
+                                    icon={
+                                        <RecordIcon
+                                            style={{
+                                                width: '20px',
+                                                height: '20px',
+                                            }}
+                                        />
+                                    }
                                 />
-                            }
+                            )}
+
+                            {showCCButton && (
+                                <ControlsButton
+                                    id='calls-popout-cc-button'
+                                    onToggle={this.onLiveCaptionsToggle}
+                                    icon={
+                                        <CCIcon
+                                            style={{
+                                                width: '20px',
+                                                height: '20px',
+                                            }}
+                                        />
+                                    }
+                                    tooltipText={liveCaptionsText}
+                                    bgColor={
+                                        this.state.showLiveCaptions
+                                            ? 'white'
+                                            : ''
+                                    }
+                                    bgColorHover={
+                                        this.state.showLiveCaptions
+                                            ? 'rgba(255, 255, 255, 0.92)'
+                                            : ''
+                                    }
+                                    iconFill={
+                                        this.state.showLiveCaptions
+                                            ? 'rgba(var(--calls-bg-rgb), 0.80)'
+                                            : ''
+                                    }
+                                    iconFillHover={
+                                        this.state.showLiveCaptions
+                                            ? 'var(--calls-bg)'
+                                            : ''
+                                    }
+                                />
+                            )}
 
                             <ReactionButton
                                 ref={this.emojiButtonRef}
@@ -1209,69 +1561,133 @@ export default class ExpandedView extends React.PureComponent<Props, State> {
                                     tooltipText={chatToolTipText}
                                     tooltipSubtext={chatToolTipSubtext}
                                     bgColor={showChatThread ? 'white' : ''}
-                                    bgColorHover={showChatThread ? 'rgba(255, 255, 255, 0.92)' : ''}
-                                    iconFill={showChatThread ? 'rgba(var(--calls-bg-rgb), 0.80)' : ''}
-                                    iconFillHover={showChatThread ? 'var(--calls-bg)' : ''}
+                                    bgColorHover={
+                                        showChatThread
+                                            ? 'rgba(255, 255, 255, 0.92)'
+                                            : ''
+                                    }
+                                    iconFill={
+                                        showChatThread
+                                            ? 'rgba(var(--calls-bg-rgb), 0.80)'
+                                            : ''
+                                    }
+                                    iconFillHover={
+                                        showChatThread ? 'var(--calls-bg)' : ''
+                                    }
                                     icon={
-                                        <div style={{position: 'relative'}}>
+                                        <CallThreadIcon>
                                             <ChatThreadIcon
-                                                style={{width: '28px', height: '28px'}}
+                                                style={{
+                                                    width: '20px',
+                                                    height: '20px',
+                                                }}
                                             />
                                             {!chatDisabled && isChatUnread && (
-                                                <UnreadIndicator mentions={this.props.threadUnreadMentions}/>
+                                                <UnreadIndicator
+                                                    mentions={
+                                                        this.props
+                                                            .threadUnreadMentions
+                                                    }
+                                                />
                                             )}
-                                        </div>
+                                        </CallThreadIcon>
                                     }
                                     unavailable={chatDisabled}
                                 />
                             )}
                         </div>
-                        <div style={{flex: '1', display: 'flex', justifyContent: 'flex-end', marginRight: '16px'}}>
+                        <div
+                            style={{
+                                flex: '1',
+                                display: 'flex',
+                                justifyContent: 'flex-end',
+                            }}
+                        >
                             <ControlsButton
                                 id='calls-popout-leave-button'
                                 onToggle={() => this.onDisconnectClick()}
-                                tooltipText={formatMessage({defaultMessage: 'Leave call'})}
-                                shortcut={reverseKeyMappings.popout[LEAVE_CALL][0]}
+                                tooltipText={formatMessage({
+                                    defaultMessage: 'Leave call',
+                                })}
+                                shortcut={
+                                    reverseKeyMappings.popout[LEAVE_CALL][0]
+                                }
                                 bgColor={'var(--dnd-indicator)'}
-                                bgColorHover={'var(--dnd-indicator)'}
-                                iconFill={'rgba(255, 255, 255, 0.80)'}
+                                bgColorHover={
+                                    'linear-gradient(0deg, var(--error-text), var(--error-text)), linear-gradient(0deg, rgba(0, 0, 0, 0.08), rgba(0, 0, 0, 0.08))'
+                                }
+                                iconFill={'white'}
                                 iconFillHover={'white'}
                                 icon={
                                     <LeaveCallIcon
-                                        style={{width: '28px', height: '28px'}}
+                                        style={{
+                                            width: '20px',
+                                            height: '20px',
+                                        }}
                                     />
                                 }
-                                margin='0'
                             />
                         </div>
                     </div>
                 </div>
-                {this.state.showParticipantsList &&
-                    <ul style={this.style.rhs}>
-                        <div style={this.style.rhsHeaderContainer}>
+                {this.state.showParticipantsList && (
+                    <ul
+                        data-testid={'rhs-participant-list'}
+                        style={this.style.rhs}
+                    >
+                        <div
+                            data-testid={'rhs-participant-list-header'}
+                            style={this.style.rhsHeaderContainer}
+                        >
                             <div style={this.style.rhsHeader}>
-                                <span>{formatMessage({defaultMessage: 'Participants'})}</span>
+                                <span>
+                                    {formatMessage({
+                                        defaultMessage: 'Participants',
+                                    })}
+                                </span>
+                                <ToTheRight />
+                                {showMuteOthers && (
+                                    <MuteOthersButton
+                                        onClick={() =>
+                                            hostMuteOthers(
+                                                this.props.channel?.id,
+                                            )
+                                        }
+                                    >
+                                        <CompassIcon icon={'microphone-off'} />
+                                        {formatMessage({
+                                            defaultMessage: 'Mute others',
+                                        })}
+                                    </MuteOthersButton>
+                                )}
                                 <CloseButton
                                     className='style--none'
-                                    onClick={() => this.onParticipantsListToggle()}
+                                    onClick={() =>
+                                        this.onParticipantsListToggle()
+                                    }
                                 >
-                                    <CompassIcon icon='close'/>
+                                    <CompassIcon icon='close' />
                                 </CloseButton>
                             </div>
                         </div>
                         {this.renderParticipantsRHSList()}
                     </ul>
-                }
-                {globalRhsSupported &&
+                )}
+                {globalRhsSupported && (
                     <ExpandedViewGlobalsStyle
-                        callThreadSelected={this.props.rhsSelectedThreadID === this.props.threadID}
+                        callThreadSelected={
+                            this.props.rhsSelectedThreadID ===
+                            this.props.threadID
+                        }
                     />
-                }
+                )}
 
-                <Overlay>
-                    <ReactionStream/>
+                <ReactionOverlay>
+                    <ReactionStream />
                     <RecordingInfoPrompt
-                        isHost={this.props.callHostID === this.props.currentUserID}
+                        isHost={
+                            this.props.callHostID === this.props.currentUserID
+                        }
                         hostChangeAt={this.props.callHostChangeAt}
                         recording={this.props.callRecording}
                         recordingMaxDuration={this.props.recordingMaxDuration}
@@ -1279,55 +1695,77 @@ export default class ExpandedView extends React.PureComponent<Props, State> {
                         promptDismissed={this.dismissRecordingPrompt}
                         transcriptionsEnabled={this.props.transcriptionsEnabled}
                     />
-                </Overlay>
+                    {Boolean(this.state.removeConfirmation) &&
+                        Boolean(
+                            this.props.sessionsMap[
+                                this.state.removeConfirmation?.sessionID || ''
+                            ],
+                        ) && (
+                            <RemoveConfirmation
+                                profile={
+                                    this.props.profiles[
+                                        this.state.removeConfirmation?.userID ||
+                                            ''
+                                    ]
+                                }
+                                onConfirm={this.onRemoveConfirm}
+                                onCancel={this.onRemoveCancel}
+                            />
+                        )}
+                </ReactionOverlay>
             </div>
         );
     }
 }
 
 const isActiveElementInteractable = () => {
-    return document.activeElement && ['INPUT', 'SELECT', 'BUTTON', 'TEXTAREA'].includes(document.activeElement.tagName);
+    return (
+        document.activeElement &&
+        ['INPUT', 'SELECT', 'BUTTON', 'TEXTAREA'].includes(
+            document.activeElement.tagName,
+        )
+    );
 };
 
-const UnreadIndicator = ({mentions}: { mentions?: number }) => {
+const UnreadIndicator = ({ mentions }: { mentions?: number }) => {
     return (
-        <UnreadDot>
-            {mentions &&
-                <MentionsCounter>{mentions > 99 ? untranslatable('99+') : mentions}</MentionsCounter>
-            }
+        <UnreadDot $padding={mentions ? '0.5px 2px' : ''}>
+            {mentions && (
+                <MentionsCounter>
+                    {mentions > 99 ? untranslatable('99+') : mentions}
+                </MentionsCounter>
+            )}
         </UnreadDot>
     );
 };
 
-const MentionsCounter = styled.span`
-    font-weight: 700;
-    font-size: 8px;
-    color: var(--button-color);
-`;
-
-const UnreadDot = styled.span`
-    position: absolute;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    z-index: 1;
-    top: -4px;
-    right: -4px;
-    width: 15px;
-    height: 12px;
-    background: var(--button-bg);
-    border-radius: 8px;
-    border: 2px solid white;
-`;
-
-const ExpandedViewGlobalsStyle = createGlobalStyle<{ callThreadSelected: boolean }>`
-    #root {
+const ExpandedViewGlobalsStyle = createGlobalStyle<{
+    callThreadSelected: boolean;
+}>`
+    body.app__body #root {
         > #global-header,
         > .team-sidebar,
         > .app-bar,
         > #channel_view .channel__wrap,
         > #SidebarContainer {
             display: none;
+        }
+
+        display: flex;
+
+        > .announcement-bar {
+          display: none;
+        }
+
+        > .main-wrapper {
+          position: absolute;
+          display: flex;
+          margin: 0;
+          padding: 0;
+          border-radius: 0;
+          border: 0;
+          width: 100%;
+          height: 100%;
         }
 
         #sidebar-right #sbrSearchFormContainer {
@@ -1340,15 +1778,46 @@ const ExpandedViewGlobalsStyle = createGlobalStyle<{ callThreadSelected: boolean
             padding: 0;
         }
 
-        ${({callThreadSelected}) => !callThreadSelected && css`
-            .sidebar--right {
-                display: none;
-            }
-        `}
+        ${({ callThreadSelected }) =>
+            !callThreadSelected &&
+            css`
+                .sidebar--right {
+                    display: none;
+                }
+            `}
+
+        #sidebar-right {
+          z-index: 1001;
+          border: 0;
+        }
+    }
+`;
+
+const ToTheRight = styled.div`
+    margin-left: auto;
+`;
+
+const MuteOthersButton = styled.button`
+    display: flex;
+    padding: 8px 8px;
+    margin-right: 6px;
+    gap: 2px;
+    font-family: 'Open Sans', sans-serif;
+    font-size: 11px;
+    font-weight: 600;
+    line-height: 16px;
+    color: var(--button-bg);
+
+    border: none;
+    background: none;
+    border-radius: 4px;
+
+    &:hover {
+        background: rgba(var(--button-bg-rgb), 0.08);
     }
 
-    #sidebar-right {
-        z-index: 1001;
+    i {
+        font-size: 14px;
     }
 `;
 
@@ -1356,13 +1825,12 @@ const CloseButton = styled.button`
     display: flex;
     align-items: center;
     justify-content: center;
-    margin-left: auto;
     color: rgba(var(--center-channel-color-rgb), 0.56);
     width: 32px;
     height: 32px;
     border-radius: 4px;
 
-    :hover {
+    &:hover {
         background: rgba(var(--center-channel-color-rgb), 0.08);
         color: rgba(var(--center-channel-color-rgb), 0.72);
         fill: rgba(var(--center-channel-color-rgb), 0.72);
@@ -1376,10 +1844,49 @@ const CloseButton = styled.button`
     }
 `;
 
-const Overlay = styled.div`
+const CloseViewButton = styled.button`
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: none;
+    padding: 10px;
+    border-radius: 4px;
+
+    svg {
+        fill: rgba(255, 255, 255, 0.64);
+    }
+
+    &:hover {
+        background: rgba(255, 255, 255, 0.08);
+
+        svg {
+            fill: rgba(255, 255, 255, 0.72);
+        }
+    }
+
+    &:active {
+        background: rgba(255, 255, 255, 0.16);
+
+        svg {
+            fill: rgba(255, 255, 255, 0.8);
+        }
+    }
+`;
+
+const ReactionOverlay = styled.div`
     position: absolute;
     bottom: 96px;
     display: flex;
     flex-direction: column;
     gap: 12px;
+    pointer-events: none;
+`;
+
+const LiveCaptionsOverlay = styled.div`
+    position: absolute;
+    width: calc(100%);
+    display: flex;
+    justify-content: center;
+    bottom: 96px;
+    z-index: auto;
 `;

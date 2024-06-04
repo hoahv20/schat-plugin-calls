@@ -1,19 +1,18 @@
-import {getCurrentChannelId} from 'mattermost-redux/selectors/entities/channels';
+import { getCurrentChannelId } from 'mattermost-redux/selectors/entities/channels';
 import React from 'react';
-import {useIntl} from 'react-intl';
-import {useSelector} from 'react-redux';
+import { useIntl } from 'react-intl';
+import { useSelector } from 'react-redux';
 import ConnectedProfiles from 'src/components/connected_profiles';
 import ActiveCallIcon from 'src/components/icons/active_call_icon';
-import {useDismissJoin} from 'src/components/incoming_calls/hooks';
+import { useDismissJoin } from 'src/components/incoming_calls/hooks';
 import Timestamp from 'src/components/timestamp';
 import {
     callInCurrentChannel,
     channelIDForCurrentCall,
     dismissedCallForCurrentChannel,
-    isLimitRestricted,
     profilesInCallInCurrentChannel,
 } from 'src/selectors';
-import {callStartedTimestampFn} from 'src/utils';
+import { callStartedTimestampFn } from 'src/utils';
 
 const ChannelCallToast = () => {
     const intl = useIntl();
@@ -21,15 +20,14 @@ const ChannelCallToast = () => {
     const connectedID = useSelector(channelIDForCurrentCall);
     const call = useSelector(callInCurrentChannel);
     const profiles = useSelector(profilesInCallInCurrentChannel);
-    const limitRestricted = useSelector(isLimitRestricted);
     const dismissed = useSelector(dismissedCallForCurrentChannel);
 
     const callID = useSelector(callInCurrentChannel)?.ID || '';
     const [onDismiss, onJoin] = useDismissJoin(currChannelID, callID);
 
-    const hasCall = (currChannelID !== connectedID && profiles.length > 0);
+    const hasCall = currChannelID !== connectedID && profiles.length > 0;
 
-    if (!hasCall || dismissed || limitRestricted) {
+    if (!hasCall || dismissed) {
         return null;
     }
 
@@ -39,21 +37,24 @@ const ChannelCallToast = () => {
         <div
             id='calls-channel-toast'
             className='toast toast__visible'
-            style={{backgroundColor: '#339970'}}
+            style={{ backgroundColor: '#339970' }}
         >
-            <div
-                className='toast__message toast__pointer'
-                onClick={onJoin}
-            >
-                <div style={{position: 'absolute'}}>
+            <div className='toast__message toast__pointer' onClick={onJoin}>
+                <div style={{ position: 'absolute' }}>
                     <ActiveCallIcon
                         fill='white'
-                        style={{margin: '0 4px'}}
+                        style={{
+                            margin: '0 4px',
+                            width: '12px',
+                            height: '12px',
+                        }}
                     />
-                    <span style={{margin: '0 4px'}}>{intl.formatMessage({defaultMessage: 'Join call'})}</span>
-                    <span style={{opacity: '0.80', margin: '0 4px'}}>
+                    <span style={{ margin: '0 4px' }}>
+                        {intl.formatMessage({ defaultMessage: 'Join call' })}
+                    </span>
+                    <span style={{ opacity: '0.80', margin: '0 4px' }}>
                         {intl.formatMessage(
-                            {defaultMessage: 'Started {callStartedAt}'},
+                            { defaultMessage: 'Started {callStartedAt}' },
                             {
                                 callStartedAt: (
                                     <Timestamp
@@ -64,20 +65,18 @@ const ChannelCallToast = () => {
                             },
                         )}
                     </span>
-                    <div/>
+                    <div />
                 </div>
             </div>
 
             <div
-                style={
-                    {
-                        position: 'absolute',
-                        display: 'flex',
-                        alignItems: 'center',
-                        height: '100%',
-                        right: '40px',
-                    }
-                }
+                style={{
+                    position: 'absolute',
+                    display: 'flex',
+                    alignItems: 'center',
+                    height: '100%',
+                    right: '40px',
+                }}
             >
                 <ConnectedProfiles
                     profiles={profiles}
@@ -88,17 +87,16 @@ const ChannelCallToast = () => {
                 />
             </div>
 
-            <div
-                className='toast__dismiss'
-                onClick={onDismiss}
-            >
+            <div className='toast__dismiss' onClick={onDismiss}>
                 <span className='close-btn'>
                     <svg
                         width='24px'
                         height='24px'
                         viewBox='0 0 24 24'
                         role='img'
-                        aria-label={intl.formatMessage({defaultMessage: 'Close icon'})}
+                        aria-label={intl.formatMessage({
+                            defaultMessage: 'Close icon',
+                        })}
                     >
                         <path
                             fillRule='nonzero'

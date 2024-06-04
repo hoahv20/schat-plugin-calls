@@ -1,4 +1,4 @@
-import React from 'react';
+import React, {useState} from 'react';
 import {useIntl} from 'react-intl';
 import styled, {css} from 'styled-components';
 
@@ -6,7 +6,9 @@ export type Props = {
     id: string,
     text: string,
     textSize: number,
+    lineHeight?: number,
     icon: React.ReactNode,
+    hoverIcon?: React.ReactNode,
     gap: number,
     iconFill?: string,
     bgColor?: string,
@@ -17,60 +19,76 @@ export type Props = {
 }
 
 export function Badge(props: Props) {
+    const [hoverState, setHoverState] = useState(false);
+
+    const toggleHover = () => {
+        setHoverState(!hoverState);
+    };
+
     return (
         <Container
+            onMouseEnter={toggleHover}
+            onMouseLeave={toggleHover}
             data-testid={props.id}
-            bgColor={props.bgColor}
-            size={props.textSize}
-            margin={props.margin}
-            padding={props.padding}
-            color={props.color}
+            $bgColor={props.bgColor}
+            $size={props.textSize}
+            $lineHeight={props.lineHeight || props.textSize}
+            $margin={props.margin}
+            $padding={props.padding}
+            $color={props.color}
         >
             {props.loading &&
-                <Spinner size={props.textSize}/>
+                <Spinner $size={props.textSize}/>
             }
-            {!props.loading &&
-                <Icon fill={props.iconFill}>{props.icon}</Icon>
+
+            {!props.loading && !hoverState &&
+                <Icon $fill={props.iconFill}>{props.icon}</Icon>
             }
-            <Text gap={props.gap}>{props.text}</Text>
+
+            {!props.loading && hoverState &&
+                <Icon $fill={props.iconFill}>{props.hoverIcon || props.icon}</Icon>
+            }
+
+            <Text $gap={props.gap}>{props.text}</Text>
         </Container>
     );
 }
 
 type ContainerProps = {
-    bgColor?: string,
-    size: number,
-    margin?: string,
-    padding?: string,
-    color?: string,
+    $bgColor?: string,
+    $size: number,
+    $lineHeight: number,
+    $margin?: string,
+    $padding?: string,
+    $color?: string,
 }
 
 const Container = styled.div<ContainerProps>`
     display: flex;
     align-items: center;
     justify-content: center;
-    background-color: ${({bgColor}) => bgColor || 'transparent'};
+    background-color: ${({$bgColor}) => $bgColor || 'transparent'};
     border-radius: 4px;
-    margin: ${({margin}) => margin || 0};
-    padding: ${({padding}) => padding || 0};
-    font-size: ${({size}) => size}px;
-    line-height: ${({size}) => size}px;
-    color: ${({color}) => color || 'currentColor'};
+    margin: ${({$margin}) => $margin || 0};
+    padding: ${({$padding}) => $padding || 0};
+    font-size: ${({$size}) => $size}px;
+    line-height: ${({$lineHeight}) => $lineHeight}px;
+    color: ${({$color}) => $color || 'currentColor'};
 `;
 
-const Text = styled.span<{ gap: number }>`
+const Text = styled.span<{ $gap: number }>`
     font-weight: 600;
-    margin-left: ${({gap}) => gap}px;
+    margin-left: ${({$gap}) => $gap}px;
 `;
 
-const Icon = styled.div<{ fill?: string }>`
+const Icon = styled.div<{ $fill?: string }>`
     display: flex;
-    fill: ${({fill}) => fill || 'currentColor'};
+    fill: ${({$fill}) => $fill || 'currentColor'};
 `;
 
-const Spinner = styled.span<{ size: number }>`
-    width: ${({size}) => size}px;
-    height: ${({size}) => size}px;
+const Spinner = styled.span<{ $size: number }>`
+    width: ${({$size}) => $size}px;
+    height: ${({$size}) => $size}px;
     border-radius: 50%;
     display: inline-block;
     border-top: 2px solid currentColor;
@@ -92,19 +110,22 @@ type HostBadgeProps = {
     onWhiteBg?: boolean;
 }
 
-export const HostBadge = ({onWhiteBg}: HostBadgeProps) => {
+export const HostBadge = ({onWhiteBg, ...rest}: HostBadgeProps) => {
     const {formatMessage} = useIntl();
 
     return (
-        <div style={{padding: '1px 2px'}}>
-            <HBadge onWhiteBg={onWhiteBg}>
+        <div
+            style={{padding: '1px 2px'}}
+            {...rest}
+        >
+            <HBadge $onWhiteBg={onWhiteBg}>
                 {formatMessage({defaultMessage: 'Host'})}
             </HBadge>
         </div>
     );
 };
 
-const HBadge = styled.div<{ onWhiteBg?: boolean }>`
+const HBadge = styled.div<{ $onWhiteBg?: boolean }>`
     font-weight: 600;
     padding: 0 4px;
     text-transform: uppercase;
@@ -112,7 +133,7 @@ const HBadge = styled.div<{ onWhiteBg?: boolean }>`
     border-radius: 4px;
     font-size: 10px;
     line-height: 16px;
-    ${({onWhiteBg}) => onWhiteBg && css`
+    ${({$onWhiteBg}) => $onWhiteBg && css`
         background: rgba(var(--center-channel-color-rgb), 0.08);
     `}
 `;

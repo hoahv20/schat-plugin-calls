@@ -1,13 +1,10 @@
-import {GlobalState} from '@mattermost/types/store';
-import {getCurrentChannel} from 'mattermost-redux/selectors/entities/channels';
-import {isCurrentUserSystemAdmin} from 'mattermost-redux/selectors/entities/users';
-import {connect} from 'react-redux';
+import { GlobalState } from '@mattermost/types/store';
+import { getCurrentChannel } from 'mattermost-redux/selectors/entities/channels';
+import { isCurrentUserSystemAdmin } from 'mattermost-redux/selectors/entities/users';
+import { connect } from 'react-redux';
 import {
     callsShowButton,
     channelIDForCurrentCall,
-    isCloudProfessionalOrEnterpriseOrTrial,
-    isCloudStarter,
-    isLimitRestricted,
     maxParticipants,
     profilesInCallInCurrentChannel,
 } from 'src/selectors';
@@ -19,12 +16,15 @@ const mapStateToProps = (state: GlobalState) => {
 
     return {
         show: callsShowButton(state, channel?.id),
-        inCall: Boolean(channelIDForCurrentCall(state) && channelIDForCurrentCall(state) === channel?.id),
+        inCall: Boolean(
+            channelIDForCurrentCall(state) &&
+                channelIDForCurrentCall(state) === channel?.id,
+        ),
         hasCall: profilesInCallInCurrentChannel(state).length > 0,
         isAdmin: isCurrentUserSystemAdmin(state),
-        isCloudStarter: isCloudStarter(state),
-        isCloudPaid: isCloudProfessionalOrEnterpriseOrTrial(state),
-        isLimitRestricted: isLimitRestricted(state),
+        isCloudStarter: false,
+        isCloudPaid: true,
+        isLimitRestricted: false,
         maxParticipants: maxParticipants(state),
         isChannelArchived: channel?.delete_at > 0,
     };

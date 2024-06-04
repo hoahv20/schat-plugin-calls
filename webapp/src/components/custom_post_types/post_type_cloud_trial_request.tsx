@@ -1,17 +1,17 @@
 // Copyright (c) 2015-present Mattermost, Inc. All Rights Reserved.
 // See LICENSE.txt for license information.
 
-import {Channel} from '@mattermost/types/channels';
-import {Post} from '@mattermost/types/posts';
-import {GlobalState} from '@mattermost/types/store';
-import {Team} from '@mattermost/types/teams';
-import {getChannel} from 'mattermost-redux/selectors/entities/channels';
-import {getTeam} from 'mattermost-redux/selectors/entities/teams';
+import { Channel } from '@mattermost/types/channels';
+import { Post } from '@mattermost/types/posts';
+import { GlobalState } from '@mattermost/types/store';
+import { Team } from '@mattermost/types/teams';
+import { getChannel } from 'mattermost-redux/selectors/entities/channels';
+import { getTeam } from 'mattermost-redux/selectors/entities/teams';
 import React from 'react';
-import {FormattedMessage} from 'react-intl';
-import {useDispatch, useSelector} from 'react-redux';
-import {displayCloudPricing} from 'src/actions';
-import {PrimaryButton, TertiaryButton} from 'src/components/buttons';
+import { FormattedMessage } from 'react-intl';
+import { useDispatch, useSelector } from 'react-redux';
+import { displayCloudPricing } from 'src/actions';
+import { PrimaryButton, TertiaryButton } from 'src/components/buttons';
 import {
     CustomPostButtonRow,
     CustomPostContainer,
@@ -20,20 +20,24 @@ import {
 } from 'src/components/custom_post_types/custom_post_styles';
 import PostText from 'src/components/custom_post_types/post_text';
 import UpgradeIllustrationSvg from 'src/components/custom_post_types/upgrade_illustration_svg';
-import {isCloud} from 'src/selectors';
+import { isCloud } from 'src/selectors';
 import styled from 'styled-components';
 
 interface Props {
     post: Post;
 }
 
-export const PostTypeCloudTrialRequest = ({post}: Props) => {
+export const PostTypeCloudTrialRequest = ({ post }: Props) => {
     const dispatch = useDispatch();
     const isCloudLicense = useSelector(isCloud);
     const attachments = post.props.attachments[0];
 
-    const channel = useSelector<GlobalState, Channel>((state) => getChannel(state, post.channel_id));
-    const team = useSelector<GlobalState, Team>((state) => getTeam(state, channel.team_id));
+    const channel = useSelector<GlobalState, Channel>((state) =>
+        getChannel(state, post.channel_id),
+    );
+    const team = useSelector<GlobalState, Team>((state) =>
+        getTeam(state, channel.team_id),
+    );
 
     // Shouldn't happen, but just in case:
     if (!isCloudLicense) {
@@ -46,30 +50,29 @@ export const PostTypeCloudTrialRequest = ({post}: Props) => {
 
     return (
         <>
-            <StyledPostText
-                text={post.message}
-                team={team}
-            />
+            <StyledPostText text={post.message} team={team} />
             <CustomPostContainer>
                 <CustomPostContent>
-                    <CustomPostHeader>
-                        {attachments.title}
-                    </CustomPostHeader>
-                    <TextBody>
-                        {text}
-                    </TextBody>
+                    <CustomPostHeader>{attachments.title}</CustomPostHeader>
+                    <TextBody>{text}</TextBody>
                     <CustomPostButtonRow>
-                        <PrimaryButton onClick={() => dispatch(displayCloudPricing())}>
-                            <FormattedMessage defaultMessage='Upgrade now'/>
+                        <PrimaryButton
+                            onClick={() => dispatch(displayCloudPricing())}
+                        >
+                            <FormattedMessage defaultMessage='Upgrade now' />
                         </PrimaryButton>
                         <StyledTertiaryButton
-                            onClick={() => window.open('https://mattermost.com/pricing-cloud')}
+                            onClick={() =>
+                                window.open(
+                                    'https://mattermost.com/pricing-cloud',
+                                )
+                            }
                         >
-                            <FormattedMessage defaultMessage='Learn more'/>
+                            <FormattedMessage defaultMessage='Learn more' />
                         </StyledTertiaryButton>
                     </CustomPostButtonRow>
                 </CustomPostContent>
-                <Image/>
+                <Image />
             </CustomPostContainer>
         </>
     );
